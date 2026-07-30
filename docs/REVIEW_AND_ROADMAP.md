@@ -214,10 +214,10 @@ JDK 21、Gradle、JavaFX 和系统密钥库迁移作为后续独立变更实施�
 尚未完成或尚未验证：
 
 - 未在本轮执行真实 B站解析、音频下载、视频下载和完整 GUI 手工验收。
-- 全局 Trust-All TLS、动态源码插件、不可信自更新、SHA-1 发布链路仍需后续处理。
+- 全局 Trust-All TLS 已移除；动态源码插件、不可信自更新、SHA-1 发布链路仍需后续处理。
 - Swing EDT 违规、固定周期轮询、查询单线程和错误处理分散仍是流畅度与稳定性风险。
 - Cookie 尚未迁移到系统密钥库；当前 `0600` 只是过渡保护。
-- Gradle/JDK 21 双平台构建基线正在迁移；Java 8 手工构建暂时保留为回退路径。
+- Gradle/JDK 21 双平台 CI 构建基线已完成；Java 8 手工构建暂时保留为回退路径。
 
 ## 10. 双平台维护基线
 
@@ -230,3 +230,15 @@ JDK 21、Gradle、JavaFX 和系统密钥库迁移作为后续独立变更实施�
 - `package.sh` 与现有 Java 8 构建暂时保留为过渡回退路径；双平台 Gradle 基线稳定后再删除。
 
 这一阶段只迁移工程基础，不同步重写 Parser、Downloader 或 Swing UI。后续双平台工作包括 ffmpeg 自动探测与随包分发、系统凭据存储适配、Windows/macOS 安装包以及平台 UI 验收。
+
+## 11. TLS 安全基线
+
+JDK 21 双平台构建通过后，应用已删除全局 Trust-All TLS 实现和 `bilibili.https.allowInsecure` 配置入口：
+
+- HTTPS 请求始终使用 JVM 默认信任库，不再允许全局跳过证书链校验。
+- SMTP 不再注入信任所有主机的 socket factory，并显式启用服务端主机名校验。
+- STARTTLS 配置键修正为 `mail.smtp.starttls.enable`，同时兼容旧版误拼写键。
+- 旧配置文件中的 `bilibili.https.allowInsecure` 会被忽略，并在下次保存配置时清理。
+- 新增 `TlsSecurityTest`，防止后续重新暴露不安全配置或自定义 Trust-All socket factory。
+
+剩余验证：真实 B站登录/下载和真实 SMTP 发送需在 JDK 21 的 Windows 与 macOS GUI 环境手工验收。

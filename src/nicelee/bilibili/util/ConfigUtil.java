@@ -20,6 +20,7 @@ import nicelee.ui.Global;
 
 public class ConfigUtil {
 	final static Pattern patternConfig = Pattern.compile("^[ ]*([0-9|a-z|A-Z|.|_]+)[ ]*=[ ]*([^ ]+.*$)");
+	final static String DEPRECATED_INSECURE_TLS_KEY = "bilibili.https.allowInsecure";
 
 	/**
 	 * 根据.lock文件判断，程序是否在运行
@@ -90,6 +91,11 @@ public class ConfigUtil {
 					Matcher matcher = patternConfig.matcher(line);
 					if (matcher.find()) {
 						String key = matcher.group(1);
+						if (isDeprecatedConfigKey(key)) {
+							notSaveYet.remove(key);
+							line = buReader.readLine();
+							continue;
+						}
 						String value = copy.getOrDefault(key, matcher.group(2));
 						line = String.format("%s = %s", key, value);
 						buWriter.write(line);
@@ -129,8 +135,13 @@ public class ConfigUtil {
 				while (config != null) {
 					Matcher matcher = patternConfig.matcher(config);
 					if (matcher.find()) {
-						Global.settings.put(matcher.group(1), matcher.group(2).trim());
-						System.out.printf("  loaded config key: %s\r\n", matcher.group(1));
+						String key = matcher.group(1);
+						if (isDeprecatedConfigKey(key)) {
+							System.out.printf("  ignored deprecated config key: %s (standard TLS is always enabled)%n", key);
+						} else {
+							Global.settings.put(key, matcher.group(2).trim());
+							System.out.printf("  loaded config key: %s\r\n", key);
+						}
 					}
 					config = buReader.readLine();
 				}
@@ -138,6 +149,10 @@ public class ConfigUtil {
 				System.out.println("配置文件不存在! ");
 			}
 		}
+	}
+
+	private static boolean isDeprecatedConfigKey(String key) {
+		return DEPRECATED_INSECURE_TLS_KEY.equals(key);
 	}
 
 }

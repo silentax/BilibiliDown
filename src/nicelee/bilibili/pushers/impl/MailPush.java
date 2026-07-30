@@ -1,6 +1,5 @@
 package nicelee.bilibili.pushers.impl;
 
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -15,8 +14,6 @@ import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMessage.RecipientType;
-
-import com.sun.mail.util.MailSSLSocketFactory;
 
 import nicelee.bilibili.annotations.Bilibili;
 import nicelee.bilibili.model.ClipInfo;
@@ -34,7 +31,7 @@ import nicelee.ui.Global;
  * @mail.smtp.host					选填，邮箱不为@sina.com @163.com @qq.com时，必填
  * @mail.smtp.port					选填，邮箱不为@sina.com @163.com @qq.com时，必填
  * @mail.smtp.ssl.enable			选填，邮箱不为@sina.com @163.com @qq.com时，必填  值为 true/false
- * @mail.smtp.starttls.enale		选填，需要starttls再填写 true/false
+ * @mail.smtp.starttls.enable		选填，需要starttls再填写 true/false
  * @mail.smtp.debug					选填，是否输出debug。值为 true/false，默认false
  *
  */
@@ -148,7 +145,9 @@ public class MailPush implements IPush {
 	final static String SMTP_HOST_KEY = "mail.smtp.host";
 	final static String SMTP_PORT_KEY = "mail.smtp.port";
 	final static String SMTP_SSL_ENABLE_KEY = "mail.smtp.ssl.enable";
-	final static String SMTP_STARTTLS_KEY = "mail.smtp.starttls.enale";
+	final static String SMTP_STARTTLS_KEY = "mail.smtp.starttls.enable";
+	final static String SMTP_STARTTLS_LEGACY_KEY = "mail.smtp.starttls.enale";
+	final static String SMTP_CHECK_SERVER_IDENTITY_KEY = "mail.smtp.ssl.checkserveridentity";
 	final static String SMTP_DEBUG_KEY = "mail.smtp.debug";
 	final static String SMTP_TO_EMAIL_KEY = "mail.smtp.to.addr"; // 这个是必须要设置的
 
@@ -156,6 +155,7 @@ public class MailPush implements IPush {
 		fromEmail = fromEmail.toLowerCase();
 		Properties props = new Properties();
 		props.put("mail.smtp.auth", "true");
+		props.put(SMTP_CHECK_SERVER_IDENTITY_KEY, "true");
 		if (fromEmail.endsWith("@sina.com")) {
 			props.put(SMTP_HOST_KEY, "smtp.sina.com");
 			props.put(SMTP_PORT_KEY, "465");
@@ -168,14 +168,6 @@ public class MailPush implements IPush {
 			props.put(SMTP_HOST_KEY, "smtp.qq.com");
 			props.put(SMTP_PORT_KEY, "465");
 			props.put(SMTP_SSL_ENABLE_KEY, "true");
-			MailSSLSocketFactory sf;
-			try {
-				sf = new MailSSLSocketFactory();
-				sf.setTrustAllHosts(true);
-				props.put("mail.smtp.ssl.socketFactory", sf);
-			} catch (GeneralSecurityException e) {
-				e.printStackTrace();
-			}
 		} else {
 			props.put(SMTP_HOST_KEY, Global.settings.get(SMTP_HOST_KEY));
 			String port = Global.settings.getOrDefault(SMTP_PORT_KEY, "465");
@@ -186,6 +178,8 @@ public class MailPush implements IPush {
 			props.put(SMTP_SSL_ENABLE_KEY, sslEnable);
 
 			String sttls = Global.settings.get(SMTP_STARTTLS_KEY);
+			if (sttls == null)
+				sttls = Global.settings.get(SMTP_STARTTLS_LEGACY_KEY);
 			if (sttls != null)
 				props.put(SMTP_STARTTLS_KEY, sttls);
 		}

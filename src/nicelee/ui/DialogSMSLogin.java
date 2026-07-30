@@ -52,7 +52,6 @@ public class DialogSMSLogin extends JDialog implements FocusListener, MouseListe
 		try {
 //			System.setProperty("proxyHost", "127.0.0.1");
 //			System.setProperty("proxyPort", "8888");
-//			HttpsURLConnection.setDefaultSSLSocketFactory(TrustAllCertSSLUtil.getFactory());
 			DialogSMSLogin dialog = new DialogSMSLogin(new INeedLogin());
 			dialog.init();
 			Logger.println("-----------------");

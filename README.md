@@ -43,7 +43,8 @@ java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
 | 登录弹窗无反应 | ✅ | Cookie 注入（浏览器复制 SESSDATA/bili_jct/DedeUserID → config/cookies.config） |
 | 文件命名以收藏夹开头 | ✅ | app.config: `bilibili.name.format = avTitle-clipTitle` |
 | ffmpeg 缺失 | ✅ | `brew install ffmpeg` |
-| Java HTTPS 证书太旧 | ⚠️ | Cookie 注入绕过，根治方向为 JDK 21 与标准 TLS 校验 |
+| Java HTTPS 证书太旧 | ⚠️ | 请使用 JDK 21 运行；后续安装包将内置运行时，避免依赖本机旧 Java |
+| 跳过 TLS 证书验证 | ✅ | 已移除 Trust-All 实现和配置入口，HTTPS/SMTP 使用 JVM 默认信任库与主机名校验 |
 
 ### 下载音频流程
 1. 粘贴 B站 URL（视频/收藏夹/UP主页面均可）

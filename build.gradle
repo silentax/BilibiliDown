@@ -72,8 +72,16 @@ tasks.register('securityTest', JavaExec) {
     mainClass = 'nicelee.test.security.ResourcesUtilSecurityTest'
 }
 
+tasks.register('tlsSecurityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies that TLS certificate validation cannot be bypassed.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.TlsSecurityTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('securityTest')
+    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest')
 }
 
 tasks.named('jar') {
