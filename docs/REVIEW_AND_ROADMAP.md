@@ -242,3 +242,9 @@ JDK 21 双平台构建通过后，应用已删除全局 Trust-All TLS 实现和 
 - 新增 `TlsSecurityTest`，防止后续重新暴露不安全配置或自定义 Trust-All socket factory。
 
 剩余验证：真实 B站登录/下载和真实 SMTP 发送需在 JDK 21 的 Windows 与 macOS GUI 环境手工验收。
+
+## 12. Windows / macOS ffmpeg 探测
+
+应用启动时按确定顺序查找 ffmpeg：用户配置路径、应用目录、系统 `PATH`，以及 Homebrew、MacPorts、WinGet、Chocolatey 的常见安装位置。每个候选都通过不经 shell 的 `ffmpeg -version` 验证，并设置 3 秒超时、检查退出码，避免启动过程无限等待或把失败命令误判为可用。
+
+macOS 与 Windows 缺失提示分别给出 Homebrew 和 WinGet 安装命令。自动下载仍只覆盖旧有 Windows/Linux 架构；将 ffmpeg 随安装包安全分发前，仍需迁移 SHA-1 校验、锁定可信发布源并为各平台二进制记录 SHA-256。

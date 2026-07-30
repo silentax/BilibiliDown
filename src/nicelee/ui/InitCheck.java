@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.model.VideoInfo;
 import nicelee.bilibili.util.CmdUtil;
+import nicelee.bilibili.util.FFmpegLocator;
 import nicelee.bilibili.util.Logger;
 import nicelee.bilibili.util.ResourcesUtil;
+import nicelee.bilibili.util.SysUtil;
 import nicelee.ui.item.JOptionPane;
 import nicelee.ui.thread.DownloadRunnable;
 
@@ -35,44 +37,41 @@ public class InitCheck {
 
 	public static void checkFFmpeg(boolean isFFmpegSupported) {
 		CmdUtil.DEFAULT_WORKING_DIR = ResourcesUtil.baseDirFile();
-		if (!checkFFmpegConf() && !checkFFmpegSys()) {
-			if (isFFmpegSupported) {
-				Object[] options = { "是", "否" };
-				int m = JOptionPane.showOptionDialog(null,
-						"检测到当前没有ffmpeg环境, mp4及小部分flv文件将无法转码或合并.\r\n     是否下载ffmpeg(自编译, 3M左右)?", "请选择：",
-						JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-				Logger.println(m);
-				if (m == 0) {
-					VideoInfo avInfo = new INeedAV().getVideoDetail("ffmpeg", 0, false);
-					DownloadRunnable downThread = new DownloadRunnable(avInfo, avInfo.getClips().get(1234L), 0);
-					Global.queryThreadPool.execute(downThread);
-					return;
-				}
+		String ffmpeg = FFmpegLocator.locate(Global.ffmpegPath, ResourcesUtil.baseDirFile());
+		if (ffmpeg != null) {
+			CmdUtil.FFMPEG_PATH = ffmpeg;
+			Logger.println("ffmpeg可用: " + ffmpeg);
+			return;
+		}
+
+		if (isFFmpegSupported) {
+			Object[] options = { "是", "否" };
+			int m = JOptionPane.showOptionDialog(null,
+					"检测到当前没有ffmpeg环境, mp4及小部分flv文件将无法转码或合并.\r\n     是否下载ffmpeg(自编译, 3M左右)?", "请选择：",
+					JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+			Logger.println(m);
+			if (m == 0) {
+				VideoInfo avInfo = new INeedAV().getVideoDetail("ffmpeg", 0, false);
+				DownloadRunnable downThread = new DownloadRunnable(avInfo, avInfo.getClips().get(1234L), 0);
+				Global.queryThreadPool.execute(downThread);
+				return;
 			}
-
-			JOptionPane.showMessageDialog(null, "当前没有ffmpeg环境，请自行下载ffmpeg，并正确配置 bilibili.ffmpegPath ", "请注意!!",
-					JOptionPane.WARNING_MESSAGE);
 		}
+
+		JOptionPane.showMessageDialog(null, missingFFmpegMessage(), "请注意!!",
+				JOptionPane.WARNING_MESSAGE);
 	}
 
-	private static boolean checkFFmpegSys() {
-		String ffmpeg = "ffmpeg";
-		String[] cmd = new String[] { ffmpeg, "-version" };
-		if (CmdUtil.run(cmd)) {
-			CmdUtil.FFMPEG_PATH = ffmpeg;
-			return true;
-		}
-		return false;
-	}
-
-	private static boolean checkFFmpegConf() {
-		String ffmpeg = ResourcesUtil.resolve(Global.ffmpegPath);
-		String[] cmd = new String[] { ffmpeg, "-version" };
-		if (CmdUtil.run(cmd)) {
-			CmdUtil.FFMPEG_PATH = ffmpeg;
-			return true;
-		}
-		return false;
+	private static String missingFFmpegMessage() {
+		String installHint;
+		if (SysUtil.isMac())
+			installHint = "macOS 可执行: brew install ffmpeg";
+		else if (SysUtil.isWindows())
+			installHint = "Windows 可执行: winget install Gyan.FFmpeg";
+		else
+			installHint = "请使用系统包管理器安装 ffmpeg";
+		return "当前没有可用的 ffmpeg，音视频合并或转码将不可用。\n" + installHint
+				+ "\n安装后重启应用，或在配置页设置 bilibili.ffmpegPath。";
 	}
 
 }

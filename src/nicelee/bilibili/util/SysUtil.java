@@ -24,6 +24,8 @@ public class SysUtil {
 			Logger.println(osName);
 			if (osName.startsWith("win"))
 				OS = "win";
+			else if (osName.startsWith("mac") || osName.startsWith("darwin"))
+				OS = "mac";
 			else if (osName.startsWith("linux"))
 				OS = "linux";
 			else
@@ -54,6 +56,18 @@ public class SysUtil {
 				EXE_SUFFIX = "";
 		}
 		return EXE_SUFFIX;
+	}
+
+	public static boolean isWindows() {
+		return "win".equals(getOS());
+	}
+
+	public static boolean isMac() {
+		return "mac".equals(getOS());
+	}
+
+	public static boolean isLinux() {
+		return "linux".equals(getOS());
 	}
 
 }

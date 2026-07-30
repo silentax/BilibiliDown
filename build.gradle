@@ -80,8 +80,16 @@ tasks.register('tlsSecurityTest', JavaExec) {
     mainClass = 'nicelee.test.security.TlsSecurityTest'
 }
 
+tasks.register('platformCompatibilityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies Windows and macOS runtime detection.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.PlatformCompatibilityTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest')
+    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest')
 }
 
 tasks.named('jar') {

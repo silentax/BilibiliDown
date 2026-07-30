@@ -17,7 +17,8 @@ Bilibili 视频下载器，用于下载B站视频。
 ### 环境
 - 推荐使用 JDK 21；构建过程通过 Gradle Wrapper 固定版本
 - Windows 与 macOS 均由 GitHub CI 执行构建、安全回归测试和 headless 烟测
-- ffmpeg 8.1（`brew install ffmpeg`，用于视频→音频转换）
+- ffmpeg（用于音视频合并与转换）：macOS 使用 `brew install ffmpeg`，Windows 使用 `winget install Gyan.FFmpeg`
+- 应用会依次探测配置路径、程序目录、系统 `PATH`，并兼容 Homebrew、MacPorts、WinGet 与 Chocolatey 常见路径
 - 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
 
 ### 启动
@@ -42,7 +43,7 @@ java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
 |------|:----:|------|
 | 登录弹窗无反应 | ✅ | Cookie 注入（浏览器复制 SESSDATA/bili_jct/DedeUserID → config/cookies.config） |
 | 文件命名以收藏夹开头 | ✅ | app.config: `bilibili.name.format = avTitle-clipTitle` |
-| ffmpeg 缺失 | ✅ | `brew install ffmpeg` |
+| ffmpeg 缺失 | ✅ | Windows/macOS 自动探测；未找到时显示对应平台的安装命令 |
 | Java HTTPS 证书太旧 | ⚠️ | 请使用 JDK 21 运行；后续安装包将内置运行时，避免依赖本机旧 Java |
 | 跳过 TLS 证书验证 | ✅ | 已移除 Trust-All 实现和配置入口，HTTPS/SMTP 使用 JVM 默认信任库与主机名校验 |
 
