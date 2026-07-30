@@ -247,4 +247,6 @@ JDK 21 双平台构建通过后，应用已删除全局 Trust-All TLS 实现和 
 
 应用启动时按确定顺序查找 ffmpeg：用户配置路径、应用目录、系统 `PATH`，以及 Homebrew、MacPorts、WinGet、Chocolatey 的常见安装位置。每个候选都通过不经 shell 的 `ffmpeg -version` 验证，并设置 3 秒超时、检查退出码，避免启动过程无限等待或把失败命令误判为可用。
 
-macOS 与 Windows 缺失提示分别给出 Homebrew 和 WinGet 安装命令。自动下载仍只覆盖旧有 Windows/Linux 架构；将 ffmpeg 随安装包安全分发前，仍需迁移 SHA-1 校验、锁定可信发布源并为各平台二进制记录 SHA-256。
+macOS 与 Windows 缺失提示分别给出 Homebrew 和 WinGet 安装命令。旧有 Windows/Linux 自动下载已迁移到固定 SHA-256 清单，并改为暂存下载、校验后原子安装；摘要缺失或不匹配时安全失败，详见 `docs/FFMPEG_BINARY_MANIFEST.md`。
+
+剩余发布风险：二进制仍托管在原上游 Release，旧应用自更新和历史 Release/安装包工作流仍使用 SHA-1。完全独立发布前需要把经核验的二进制迁移到本仓库受控 Release，并重做 JDK 21 的 DMG/MSI 发布链。

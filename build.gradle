@@ -88,8 +88,17 @@ tasks.register('platformCompatibilityTest', JavaExec) {
     mainClass = 'nicelee.test.security.PlatformCompatibilityTest'
 }
 
+tasks.register('ffmpegDownloadSecurityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies the pinned ffmpeg SHA-256 manifest and staged installation.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.FFmpegDownloadSecurityTest'
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest')
+    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
+            tasks.named('ffmpegDownloadSecurityTest')
 }
 
 tasks.named('jar') {

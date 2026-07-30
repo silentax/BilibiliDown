@@ -30,32 +30,39 @@ public class Encrypt {
 	}
 	
 	public static String SHA1(File f) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA1");
-            byte[] buffer = new byte[1024];
-            FileInputStream in = new FileInputStream(f);
-            int len = in.read(buffer);
-            while(len > 0) {
-            	md.update(buffer, 0, len);
-            	len = in.read(buffer);
-            }
-            in.close();
-            byte[] digest = md.digest();
+		return digest(f, "SHA1");
+	}
 
-            StringBuffer hexstr = new StringBuffer();
-            String shaHex = "";
-            for (int i = 0; i < digest.length; i++) {
-                shaHex = Integer.toHexString(digest[i] & 0xFF);
-                if (shaHex.length() < 2) {
-                    hexstr.append(0);
-                }
-                hexstr.append(shaHex);
-            }
-            return hexstr.toString();
-        } catch (NoSuchAlgorithmException e) {
-        	throw new RuntimeException("没有SHA1这个算法！");
-        } catch (IOException e) {
-        	throw new RuntimeException(e);
+	public static String SHA256(File f) {
+		return digest(f, "SHA-256");
+	}
+
+	private static String digest(File f, String algorithm) {
+		try {
+			MessageDigest md = MessageDigest.getInstance(algorithm);
+			byte[] buffer = new byte[8192];
+			try (FileInputStream in = new FileInputStream(f)) {
+				int len = in.read(buffer);
+				while (len > 0) {
+					md.update(buffer, 0, len);
+					len = in.read(buffer);
+				}
+			}
+			byte[] digest = md.digest();
+
+			StringBuilder hexstr = new StringBuilder(digest.length * 2);
+			for (int i = 0; i < digest.length; i++) {
+				String shaHex = Integer.toHexString(digest[i] & 0xFF);
+				if (shaHex.length() < 2) {
+					hexstr.append(0);
+				}
+				hexstr.append(shaHex);
+			}
+			return hexstr.toString();
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException("不支持摘要算法: " + algorithm, e);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 	}
 }

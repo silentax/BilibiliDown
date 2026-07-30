@@ -19,6 +19,7 @@ Bilibili 视频下载器，用于下载B站视频。
 - Windows 与 macOS 均由 GitHub CI 执行构建、安全回归测试和 headless 烟测
 - ffmpeg（用于音视频合并与转换）：macOS 使用 `brew install ffmpeg`，Windows 使用 `winget install Gyan.FFmpeg`
 - 应用会依次探测配置路径、程序目录、系统 `PATH`，并兼容 Homebrew、MacPorts、WinGet 与 Chocolatey 常见路径
+- 旧版 Windows/Linux ffmpeg 自动下载使用固定 SHA-256 清单，校验成功前不会进入可执行路径
 - 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
 
 ### 启动
