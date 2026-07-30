@@ -1,0 +1,111 @@
+plugins {
+    id 'application'
+    id 'java'
+}
+
+group = 'io.github.silentax'
+version = '6.41-maintenance-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(
+                providers.gradleProperty('javaToolchainVersion').getOrElse('21') as int)
+    }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+application {
+    mainClass = 'nicelee.ui.FrameMain'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+            exclude 'nicelee/test/**'
+        }
+        resources {
+            srcDirs = ['src']
+            include 'resources/**'
+        }
+    }
+
+    securityTest {
+        java {
+            srcDirs = ['src']
+            include 'nicelee/test/security/**'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    securityTestImplementation.extendsFrom implementation
+    securityTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
+dependencies {
+    implementation 'com.google.zxing:core:3.3.3'
+    implementation 'com.sun.mail:javax.mail:1.6.2'
+    implementation 'javax.activation:activation:1.1.1'
+}
+
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('securityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Runs security regression tests without JUnit.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.ResourcesUtilSecurityTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('securityTest')
+}
+
+tasks.named('jar') {
+    archiveFileName = 'INeedBiliAV.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Main-Class': application.mainClass.get())
+    }
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { dependency ->
+            dependency.isDirectory() ? dependency : zipTree(dependency)
+        }
+    }
+    exclude 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.SF'
+}
+
+tasks.register('smokeTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Runs the packaged application in headless version mode.'
+    dependsOn tasks.named('jar')
+    classpath = files(tasks.named('jar').flatMap { it.archiveFile })
+    mainClass = 'nicelee.ui.FrameMain'
+    jvmArgs '-Djava.awt.headless=true', '-Dfile.encoding=UTF-8'
+    args '-v'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('smokeTest')
+}
+
+tasks.named('wrapper') {
+    gradleVersion = '8.14.3'
+    distributionType = Wrapper.DistributionType.BIN
+}

@@ -217,4 +217,16 @@ JDK 21、Gradle、JavaFX 和系统密钥库迁移作为后续独立变更实施�
 - 全局 Trust-All TLS、动态源码插件、不可信自更新、SHA-1 发布链路仍需后续处理。
 - Swing EDT 违规、固定周期轮询、查询单线程和错误处理分散仍是流畅度与稳定性风险。
 - Cookie 尚未迁移到系统密钥库；当前 `0600` 只是过渡保护。
-- 仍使用 Java 8、手工 JAR 依赖和非标准构建，尚无依赖锁文件。
+- Gradle/JDK 21 双平台构建基线正在迁移；Java 8 手工构建暂时保留为回退路径。
+
+## 10. 双平台维护基线
+
+后续产品目标明确为 Windows 与 macOS 双平台良好运行。当前工程迁移采用以下约束：
+
+- JDK 21 作为统一构建工具链，源码字节码兼容级别暂时保持 Java 8，降低首轮迁移风险。
+- Gradle Wrapper 固定构建版本，并校验发行包 SHA-256；不要求用户全局安装 Gradle。
+- Maven Central 统一声明现有第三方依赖，Gradle dependency locking 固定解析结果，并用 SHA-256 校验依赖内容。
+- GitHub CI 在 `windows-latest` 与 `macos-latest` 上分别执行 clean build、安全回归测试和 headless 启动烟测。
+- `package.sh` 与现有 Java 8 构建暂时保留为过渡回退路径；双平台 Gradle 基线稳定后再删除。
+
+这一阶段只迁移工程基础，不同步重写 Parser、Downloader 或 Swing UI。后续双平台工作包括 ffmpeg 自动探测与随包分发、系统凭据存储适配、Windows/macOS 安装包以及平台 UI 验收。

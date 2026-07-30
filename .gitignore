@@ -7,10 +7,12 @@
 *.log
 *.config
 *.bat
+!gradlew.bat
 *.flv
 *.mp4
 *.exe
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.part
 *.m4s
 *.txt
@@ -27,6 +29,8 @@ simplelogger.properties
 /release/parsers1
 /release/parsers
 /.idea
+/.gradle
+/build
 /parsers1
 /parsers
 /update

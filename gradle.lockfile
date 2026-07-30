@@ -1,0 +1,7 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+com.google.zxing:core:3.3.3=compileClasspath,runtimeClasspath,securityTestCompileClasspath,securityTestRuntimeClasspath,testCompileClasspath,testRuntimeClasspath
+com.sun.mail:javax.mail:1.6.2=compileClasspath,runtimeClasspath,securityTestCompileClasspath,securityTestRuntimeClasspath,testCompileClasspath,testRuntimeClasspath
+javax.activation:activation:1.1.1=compileClasspath,runtimeClasspath,securityTestCompileClasspath,securityTestRuntimeClasspath,testCompileClasspath,testRuntimeClasspath
+empty=annotationProcessor,securityTestAnnotationProcessor,testAnnotationProcessor

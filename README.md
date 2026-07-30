@@ -5,27 +5,37 @@
 ![支持系统 Win/Linux/Mac](https://img.shields.io/badge/Platform-%20win%20|%20linux%20|%20mac-lightgrey.svg)
 ![测试版本64位Win10系统, jre 1.8.0_101](https://img.shields.io/badge/TestPass-Win10%20x64__java__1.8.0__101-green.svg)
 ![开源协议Apache2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)  
-![当前版本](https://img.shields.io/github/release/nICEnnnnnnnLee/BilibiliDown.svg?style=flat-square)
+![当前版本](https://img.shields.io/github/release/silentax/BilibiliDown.svg?style=flat-square)
 [![CI](https://github.com/silentax/BilibiliDown/actions/workflows/ci.yml/badge.svg)](https://github.com/silentax/BilibiliDown/actions/workflows/ci.yml)
 ![最近更新](https://img.shields.io/github/last-commit/silentax/BilibiliDown.svg?style=flat-square&color=FF9900)
 
 Bilibili 视频下载器，用于下载B站视频。  
 ===============================
 
-## macOS 本地使用指南
+## Windows / macOS 构建与运行
 
 ### 环境
-- Java 1.8.0_211（macOS 自带，旧版但 Cookie 注入方案可用）
+- 推荐使用 JDK 21；构建过程通过 Gradle Wrapper 固定版本
+- Windows 与 macOS 均由 GitHub CI 执行构建、安全回归测试和 headless 烟测
 - ffmpeg 8.1（`brew install ffmpeg`，用于视频→音频转换）
 - 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
 
 ### 启动
 ```bash
 cd /path/to/BilibiliDown
-bash package.sh
-cd release
-java -Dfile.encoding=utf-8 -Dhttps.protocols=TLSv1.2 -jar ../INeedBiliAV.jar
+./gradlew clean check jar
+java -Dfile.encoding=utf-8 -jar build/libs/INeedBiliAV.jar
 ```
+
+Windows PowerShell 使用：
+
+```powershell
+cd C:\path\to\BilibiliDown
+.\gradlew.bat clean check jar
+java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
+```
+
+旧版 `package.sh` 暂时保留，仅作为 Java 8 回退构建路径。
 
 ### 已修复的问题
 | 问题 | 状态 | 方案 |
@@ -33,12 +43,12 @@ java -Dfile.encoding=utf-8 -Dhttps.protocols=TLSv1.2 -jar ../INeedBiliAV.jar
 | 登录弹窗无反应 | ✅ | Cookie 注入（浏览器复制 SESSDATA/bili_jct/DedeUserID → config/cookies.config） |
 | 文件命名以收藏夹开头 | ✅ | app.config: `bilibili.name.format = avTitle-clipTitle` |
 | ffmpeg 缺失 | ✅ | `brew install ffmpeg` |
-| Java HTTPS 证书太旧 | ⚠️ | Cookie 注入绕过，根治需 `brew install openjdk@17` |
+| Java HTTPS 证书太旧 | ⚠️ | Cookie 注入绕过，根治方向为 JDK 21 与标准 TLS 校验 |
 
 ### 下载音频流程
 1. 粘贴 B站 URL（视频/收藏夹/UP主页面均可）
 2. 勾选「仅下载音频」
-3. 点下载，输出目录 `release/download/`
+3. 点下载，默认输出目录 `download/`
 
 ### 安全提醒
 - `config/cookies.config` 明文存储登录凭据，用完退出登录或删除
@@ -59,16 +69,16 @@ java -Dfile.encoding=utf-8 -Dhttps.protocols=TLSv1.2 -jar ../INeedBiliAV.jar
 * cookie刷新代码的wasm逆向实现参考了[SocialSisterYi/bilibili-API-collect#524](https://github.com/SocialSisterYi/bilibili-API-collect/issues/524#issuecomment-1537519232)[![](https://img.shields.io/badge/license-CC%20BY%20NC%204.0-green.svg)](https://github.com/SocialSisterYi/bilibili-API-collect/issues/524#issuecomment-1537519232)
 
 ## :smile:其它  
-* **下载地址**: <https://nICEnnnnnnnLee.github.io/BilibiliDown/guide/quick-start/download>   
-* **GitHub**: [https://github.com/nICEnnnnnnnLee/BilibiliDown](https://github.com/nICEnnnnnnnLee/BilibiliDown)  
-* **Github Release**: <https://github.com/nICEnnnnnnnLee/BilibiliDown/releases>  
+* **上游历史文档**: <https://nICEnnnnnnnLee.github.io/BilibiliDown/guide/quick-start/download>   
+* **GitHub**: [https://github.com/silentax/BilibiliDown](https://github.com/silentax/BilibiliDown)  
+* **Github Release**: <https://github.com/silentax/BilibiliDown/releases>  
 * **Bitbucket**: [https://bitbucket.org/NiceLeeee/BilibiliDown](https://bitbucket.org/NiceLeeee/BilibiliDown)  
 * **Gitee码云**: [https://gitee.com/NiceLeee/BilibiliDown](https://gitee.com/NiceLeee/BilibiliDown)  
-* [**更新日志**](https://github.com/nICEnnnnnnnLee/BilibiliDown/blob/master/UPDATE.md)
+* [**更新日志**](https://github.com/silentax/BilibiliDown/blob/master/UPDATE.md)
 
 
 ## :smile:LICENSE  
-+ [第三方LICENSE](https://github.com/nICEnnnnnnnLee/BilibiliDown/tree/master/release/LICENSE/third-party)  
++ [第三方LICENSE](https://github.com/silentax/BilibiliDown/tree/master/release/LICENSE/third-party)  
 + 本项目提供的`ffmpeg.exe`基于[nICEnnnnnnnLee/FFmpeg-Builds](https://github.com/nICEnnnnnnnLee/FFmpeg-Builds/blob/master/SPECIFIC_CHANGES.md)进行编译。  
     设置Github secret `FF_SPECIFIC_CONFIGURE`如下：  
 ```
