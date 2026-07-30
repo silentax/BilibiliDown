@@ -27,6 +27,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
 import nicelee.bilibili.INeedAV;
+import nicelee.bilibili.enums.DownloadModeEnum;
 import nicelee.bilibili.model.FavList;
 import nicelee.bilibili.util.Logger;
 import nicelee.ui.item.MJButton;
@@ -45,6 +46,7 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	public ImageIcon backgroundIcon = Global.backgroundImg;
 	public JLabel jlHeader;
 	public JComboBox<Object> cmbFavList=new JComboBox<>();
+	JComboBox<String> cmbDownloadMode = new JComboBox<>(new String[] { "视频+音频", "仅视频", "仅音频" });
 	String placeHolder = "请在此输入B站 BV/av/ep/ss/md/ml号或地址";
 	JTextField txtSearch = new MJTextField(placeHolder);
 	//new MJTextField("https://www.bilibili.com/video/av35296336");
@@ -96,16 +98,21 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 		
 		// 查找模块
 		JPanel jpSearch = new JPanel();
-		txtSearch.setPreferredSize(new Dimension(680, 40));
+		txtSearch.setPreferredSize(new Dimension(540, 40));
+		txtSearch.addActionListener(this);
 		btnSearch.addActionListener(this);
 		btnSearch.setPreferredSize(new Dimension(80, 40));
 		btnSearchNextPage.addActionListener(this);
 		btnSearchNextPage.setPreferredSize(new Dimension(80, 40));
 		
         cmbFavList.addItem("---我的收藏夹---");
-        cmbFavList.setPreferredSize(new Dimension(120, 40));
-        cmbFavList.addItemListener(this);
+		cmbFavList.setPreferredSize(new Dimension(120, 40));
+		cmbFavList.addItemListener(this);
+		cmbDownloadMode.setPreferredSize(new Dimension(110, 40));
+		cmbDownloadMode.setSelectedIndex(Global.downloadMode.getMode());
+		cmbDownloadMode.addItemListener(this);
 		jpSearch.add(txtSearch);
+		jpSearch.add(cmbDownloadMode);
 		jpSearch.add(btnSearch);
 		jpSearch.add(btnSearchNextPage);
 		jpSearch.add(cmbFavList);
@@ -183,7 +190,7 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	static Pattern paramPattern = Pattern.compile("(.*)p=([0-9]+)$");
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		if (e.getSource() == btnSearch) {
+		if (e.getSource() == btnSearch || e.getSource() == txtSearch) {
 			search();
 		}else if(e.getSource() == btnSearchNextPage){
 			String origin = txtSearch.getText();
@@ -278,7 +285,12 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	@Override
 	public void itemStateChanged(ItemEvent e) {
 		if (e.getStateChange() == ItemEvent.SELECTED) {
-            if(e.getItem() instanceof FavList) {
+			if (e.getSource() == cmbDownloadMode) {
+				Global.downloadMode = DownloadModeEnum.getModeEnum(cmbDownloadMode.getSelectedIndex());
+				Logger.println("下载模式已切换为: " + cmbDownloadMode.getSelectedItem());
+				return;
+			}
+			if(e.getItem() instanceof FavList) {
             	FavList fav = (FavList) e.getItem();
             	String url = "https://space.bilibili.com/%s/favlist?fid=%s&ftype=create";
             	url = String.format(url, fav.getOwnerId(), fav.getfId());

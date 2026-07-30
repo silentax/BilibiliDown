@@ -135,7 +135,6 @@ public class LoginThread extends Thread {
 		 */
 		System.out.println("正在获取验证AuthKey以生成二维码...");
 		String authKey = inl.getAuthKey();
-		System.out.println("authKey: " + authKey);
 		// 显示二维码图片
 		FrameQRCode qr = new FrameQRCode(inl.qrCodeStr);
 		qr.initUI();

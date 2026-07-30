@@ -2,7 +2,6 @@ package nicelee.bilibili;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -101,7 +100,6 @@ public class INeedLogin {
 		try {
 			String json = util.getContent(url, genLoginHeader());
 
-			System.out.println(json);
 			JSONObject jObj = new JSONObject(json).getJSONObject("data");
 
 			boolean succ = jObj.getInt("code") == 0;
@@ -124,21 +122,22 @@ public class INeedLogin {
 	 */
 	public void saveCookiesAndToken() {
 		File file = ResourcesUtil.sourceOf("./config/cookies.config");
-		try {
-			OutputStreamWriter fileWriter = new OutputStreamWriter(new FileOutputStream(file), "utf-8");
-			BufferedWriter oos = new BufferedWriter(fileWriter);
+		boolean saved = false;
+		try (OutputStreamWriter fileWriter = new OutputStreamWriter(new FileOutputStream(file), "utf-8");
+				BufferedWriter oos = new BufferedWriter(fileWriter)) {
 			oos.write(iCookies.toString());
 			if(refreshToken != null) {
 				HttpCookies.setRefreshToken(refreshToken);
 				oos.newLine();
 				oos.write(refreshToken);
 			}
-			oos.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
+			oos.flush();
+			saved = true;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		if (saved)
+			ResourcesUtil.restrictFileToOwner(file);
 	}
 
 	/**
@@ -148,6 +147,8 @@ public class INeedLogin {
 	 */
 	public String readCookies() {
 		File file = ResourcesUtil.sourceOf("./config/cookies.config");
+		if (file.exists())
+			ResourcesUtil.restrictFileToOwner(file);
 		return ResourcesUtil.readAll(file);
 	}
 
@@ -191,7 +192,6 @@ public class INeedLogin {
 			String url = "https://passport.bilibili.com/x/passport-login/web/key?_=" + System.currentTimeMillis();
 			HashMap<String, String> headers = genLoginHeader();
 			String result = util.getContent(url, headers);
-			Logger.println(result);
 			JSONObject obj = new JSONObject(result).getJSONObject("data");
 			String hash = obj.optString("hash", "");
 			if (hash.isEmpty()) {
@@ -207,7 +207,6 @@ public class INeedLogin {
 					"username=%s&password=%s&keep=0&source=main_mini&token=%s&go_url=https://www.bilibili.com&challenge=%s&validate=%s&seccode=%s",
 					userName, encryptPwd, token, challenge, validate, seccode);
 			result = util.postContent(url, headers, param);
-			Logger.println(result);
 			JSONObject response = new JSONObject(result);
 			if (response.optInt("code") == 0) {
 				JSONObject data = response.getJSONObject("data");
@@ -235,7 +234,6 @@ public class INeedLogin {
 					"cid=%s&tel=%s&source=main_mini&token=%s&challenge=%s&validate=%s&seccode=%s",
 					countryCode, phoneNumber, token, challenge, validate, seccode);
 			String result = util.postContent(url, headers, param);
-			Logger.println(result);
 			return new JSONObject(result);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -251,7 +249,6 @@ public class INeedLogin {
 					"cid=%s&tel=%s&code=%s&captcha_key=%s&source=main_mini&go_url=&keep=true",
 					countryCode, phoneNumber, code, captchaKey);
 			String result = util.postContent(url, headers, param);
-			Logger.println(result);
 			JSONObject response = new JSONObject(result);
 			if (response.optInt("code") == 0) {
 				JSONObject data = response.getJSONObject("data");
@@ -275,7 +272,6 @@ public class INeedLogin {
 		String postUrl = "https://passport.bilibili.com/x/passport-login/web/cookie/refresh?csrf=%s&refresh_csrf=%s&source=main_web&refresh_token=%s";
 		postUrl = String.format(postUrl, csrf, refresh_csrf, refresh_token);
 		String result = util.postContent(postUrl, header.getCommonHeaders(), "", HttpCookies.getGlobalCookies());
-		Logger.println(result);
 		JSONObject json = new JSONObject(result);
 		if(json.getInt("code") == 0) {
 			JSONObject data = json.optJSONObject("data");
@@ -289,7 +285,6 @@ public class INeedLogin {
 				postUrl = String.format(postUrl, HttpCookies.getCsrf(), refresh_token);
 				result = util.postContent(postUrl, header.getCommonHeaders(), "", HttpCookies.getGlobalCookies());
 				Logger.println("将原来的Cookie注销掉");
-				Logger.println(result);
 			}
 			return null;
 		}else {

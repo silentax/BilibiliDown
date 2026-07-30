@@ -130,7 +130,7 @@ public class ConfigUtil {
 					Matcher matcher = patternConfig.matcher(config);
 					if (matcher.find()) {
 						Global.settings.put(matcher.group(1), matcher.group(2).trim());
-						System.out.printf("  key-->value:  %s --> %s\r\n", matcher.group(1), matcher.group(2));
+						System.out.printf("  loaded config key: %s\r\n", matcher.group(1));
 					}
 					config = buReader.readLine();
 				}

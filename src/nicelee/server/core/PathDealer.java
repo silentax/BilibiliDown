@@ -142,12 +142,8 @@ public class PathDealer {
 				out.write(result);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
-			System.out.println(klass.getName());
-			System.out.println(currentMethod.getName());
-			for (Object obj : values) {
-				System.out.println(obj);
-			}
+			System.err.printf("Controller invocation failed: %s#%s (%s)%n",
+					klass.getName(), currentMethod.getName(), e.getClass().getSimpleName());
 		}
 	}
 

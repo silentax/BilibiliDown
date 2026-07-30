@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Build application JAR
+        run: bash package.sh
+
+      - name: Run security regression test
+        run: |
+          mkdir -p target/security-test-classes
+          javac -cp INeedBiliAV.jar -encoding UTF-8 \
+            -d target/security-test-classes \
+            src/nicelee/test/security/ResourcesUtilSecurityTest.java
+          java -cp INeedBiliAV.jar:target/security-test-classes \
+            nicelee.test.security.ResourcesUtilSecurityTest
+
+      - name: Run headless version smoke test
+        run: java -Djava.awt.headless=true -Dfile.encoding=utf-8 -jar INeedBiliAV.jar -v

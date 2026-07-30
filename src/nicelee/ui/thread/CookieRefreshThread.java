@@ -108,7 +108,6 @@ public class CookieRefreshThread extends Thread {
 		HttpRequestUtil util = new HttpRequestUtil();
 		HttpHeaders headers = new HttpHeaders();
 		String csrfInfo = util.getContent(url, headers.getCommonHeaders(), HttpCookies.getGlobalCookies());
-		Logger.println(csrfInfo);
 		JSONObject csrfInfoObj = new JSONObject(csrfInfo).getJSONObject("data");
 		boolean needRefresh = csrfInfoObj.getBoolean("refresh");
 		if (!needRefresh) {

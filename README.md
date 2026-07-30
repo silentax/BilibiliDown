@@ -1,15 +1,52 @@
 # INeedBiliAV - BilibiliDown
+> 本仓库为个人持续维护版本，不自动同步上游。当前优先改进安全性、易用性、构建质量和桌面端使用体验。
+
 ![语言java](https://img.shields.io/badge/Require-java-green.svg)
 ![支持系统 Win/Linux/Mac](https://img.shields.io/badge/Platform-%20win%20|%20linux%20|%20mac-lightgrey.svg)
 ![测试版本64位Win10系统, jre 1.8.0_101](https://img.shields.io/badge/TestPass-Win10%20x64__java__1.8.0__101-green.svg)
 ![开源协议Apache2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)  
 ![当前版本](https://img.shields.io/github/release/nICEnnnnnnnLee/BilibiliDown.svg?style=flat-square)
-[![CI](https://github.com/nICEnnnnnnnLee/BilibiliDown/actions/workflows/release.yml/badge.svg)](https://github.com/nICEnnnnnnnLee/BilibiliDown/actions/workflows/release.yml)
-![最近更新](https://img.shields.io/github/last-commit/nICEnnnnnnnLee/BilibiliDown.svg?style=flat-square&color=FF9900)
+[![CI](https://github.com/silentax/BilibiliDown/actions/workflows/ci.yml/badge.svg)](https://github.com/silentax/BilibiliDown/actions/workflows/ci.yml)
+![最近更新](https://img.shields.io/github/last-commit/silentax/BilibiliDown.svg?style=flat-square&color=FF9900)
 
 Bilibili 视频下载器，用于下载B站视频。  
 ===============================
-登录后的凭证明文保存在`config`文件夹下的`cookies.config`。    
+
+## macOS 本地使用指南
+
+### 环境
+- Java 1.8.0_211（macOS 自带，旧版但 Cookie 注入方案可用）
+- ffmpeg 8.1（`brew install ffmpeg`，用于视频→音频转换）
+- 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
+
+### 启动
+```bash
+cd /path/to/BilibiliDown
+bash package.sh
+cd release
+java -Dfile.encoding=utf-8 -Dhttps.protocols=TLSv1.2 -jar ../INeedBiliAV.jar
+```
+
+### 已修复的问题
+| 问题 | 状态 | 方案 |
+|------|:----:|------|
+| 登录弹窗无反应 | ✅ | Cookie 注入（浏览器复制 SESSDATA/bili_jct/DedeUserID → config/cookies.config） |
+| 文件命名以收藏夹开头 | ✅ | app.config: `bilibili.name.format = avTitle-clipTitle` |
+| ffmpeg 缺失 | ✅ | `brew install ffmpeg` |
+| Java HTTPS 证书太旧 | ⚠️ | Cookie 注入绕过，根治需 `brew install openjdk@17` |
+
+### 下载音频流程
+1. 粘贴 B站 URL（视频/收藏夹/UP主页面均可）
+2. 勾选「仅下载音频」
+3. 点下载，输出目录 `release/download/`
+
+### 安全提醒
+- `config/cookies.config` 明文存储登录凭据，用完退出登录或删除
+- 不要将此文件提交到 Git
+
+---
+
+登录后的凭证明文保存在`config`文件夹下的`cookies.config`。
 如有需要请直接删除，或`操作->登录相关->退出登录`  
 更多详情请参考[帮助文档](https://nICEnnnnnnnLee.github.io/BilibiliDown) (如果访问不太顺畅的话，可以试试[备用帮助文档](https://bili.nicelee.top/BilibiliDown))  
 

@@ -316,13 +316,14 @@ public class CmdUtil {
 			String tail = suffixM.group();
 
 			if (Global.doRenameAfterComplete) {
-				File file = new File(Global.savePath, formattedTitle + tail);
+				File saveDirectory = new File(Global.savePath);
+				File file = ResourcesUtil.resolveUnderDirectory(saveDirectory, formattedTitle + tail);
 				File folder = file.getParentFile();
 				if (!folder.exists())
 					folder.mkdirs();
 				if((!originFile.renameTo(file)) && Global.autoNumberWhenFileExists) {// 如果不成功，大概率是文件名重复，在后面加上序号，类似于(01)
 					for(int i = 1; i < 100; i++) {
-						File f = new File(Global.savePath, 
+						File f = ResourcesUtil.resolveUnderDirectory(saveDirectory,
 								String.format("%s(%02d)%s", formattedTitle, i, tail));
 						Logger.println(f.getAbsolutePath());
 						if(!f.exists()) {

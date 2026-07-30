@@ -11,8 +11,12 @@ import java.io.RandomAccessFile;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
 import java.util.Random;
+import java.util.Set;
 
 import nicelee.bilibili.model.ClipInfo;
 
@@ -63,14 +67,62 @@ public class ResourcesUtil {
 	}
 
 	public static void write(File f, String content) {
+		write(f, content, false);
+	}
+
+	public static void writeSensitive(File f, String content) {
+		write(f, content, true);
+	}
+
+	private static void write(File f, String content, boolean sensitive) {
 		try {
 			f.getParentFile().mkdirs();
 			FileOutputStream out = new FileOutputStream(f);
 			out.write(content.getBytes("utf-8"));
 			out.close();
+			if (sensitive)
+				restrictFileToOwner(f);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	/**
+	 * 将敏感文件权限收紧为仅当前用户可读写。POSIX 系统优先使用 0600，
+	 * 其它系统回退到 java.io.File 提供的 owner-only 权限设置。
+	 */
+	public static boolean restrictFileToOwner(File file) {
+		if (file == null || !file.exists())
+			return false;
+		try {
+			Set<PosixFilePermission> permissions = EnumSet.of(
+					PosixFilePermission.OWNER_READ,
+					PosixFilePermission.OWNER_WRITE);
+			Files.setPosixFilePermissions(file.toPath(), permissions);
+			return true;
+		} catch (UnsupportedOperationException | IOException | SecurityException e) {
+			boolean result = file.setReadable(false, false);
+			result = file.setWritable(false, false) && result;
+			result = file.setExecutable(false, false) && result;
+			result = file.setReadable(true, true) && result;
+			result = file.setWritable(true, true) && result;
+			return result;
+		}
+	}
+
+	/**
+	 * 解析下载目录内的相对路径，并拒绝 ../ 等导致的目录逃逸。
+	 */
+	public static File resolveUnderDirectory(File directory, String relativePath) throws IOException {
+		if (directory == null || relativePath == null)
+			throw new IOException("下载目录或相对路径为空");
+		File base = directory.getCanonicalFile();
+		File candidate = new File(base, relativePath).getCanonicalFile();
+		String basePath = base.getPath();
+		String candidatePath = candidate.getPath();
+		if (!candidatePath.equals(basePath) && !candidatePath.startsWith(basePath + File.separator))
+			throw new IOException("目标文件路径超出下载目录");
+		return candidate;
 	}
 
 	public static String readAll(File f) {

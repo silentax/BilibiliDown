@@ -1,3 +1,20 @@
+## 本地维护记录（macOS）
+
+### 2026-06-07 — 第二次使用，命名格式修复
+- 修改 `bilibili.name.format = avTitle-clipTitle`，文件命名不再带收藏夹前缀
+- 补充 README.md 本地使用指南
+- 验证 cookies.config 仍然有效，无需重新登录
+
+### 2026-05-29 — 首次部署，踩坑记录
+- **登录弹窗无反应**：Java 1.8.0_211 证书链过旧，B站 HTTPS 握手失败。Cookie 注入方案绕过。
+  - 从浏览器复制 SESSDATA、bili_jct、DedeUserID → `config/cookies.config`
+  - 根治方案：`brew install openjdk@17`
+- **启动时首次 fingerprint 生成无超时**：程序在 `genNewFingerprint()` 中直连 bilibili.com 且无超时
+  - 手动创建 `config/fingerprint.config` 绕过
+- **macOS ffmpeg**：内置 `ffmpeg.exe` 是 Windows 的，需 `brew install ffmpeg`
+- **launch.jar 缺失**：gitcode 镜像可能缺文件，直接用 `INeedBiliAV.jar`
+
+---
 ## UPDATE
 * V6.41 `2026-04-24`
     * 优化：添加对url类型https://space.bilibili.com/[0-9]+/lists?sid=[0-9]+`的支持 #289

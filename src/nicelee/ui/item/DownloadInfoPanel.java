@@ -178,7 +178,7 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 					Runtime.getRuntime().exec(cmd);
 				} else if(file.exists()){
 					Desktop desktop = Desktop.getDesktop();
-					desktop.open(file);
+					desktop.open(file.getParentFile());
 				} else {
 					Desktop desktop = Desktop.getDesktop();
 					desktop.open(file.getParentFile());
@@ -198,11 +198,17 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 //			if(Global.downloadTaskList.get(this).getStatus() == 0) {
 //				JOptionPane.showMessageDialog(this, "当前正在文件下载中!", "警告", JOptionPane.WARNING_MESSAGE);
 //			}
-			if(TabDownload.isStopAll()) {
-				Logger.println("停止任务中，请误操作");
-				return;
-			}
-			removeTask(true);
+				if(TabDownload.isStopAll()) {
+					Logger.println("停止任务中，请误操作");
+					return;
+				}
+				Object[] options = { "移除任务", "取消" };
+				int selected = JOptionPane.showOptionDialog(this,
+						"将从列表移除此任务，并删除未完成的 .part 临时文件。\n已完成的文件不会被删除。",
+						"确认移除任务", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE,
+						null, options, options[1]);
+				if (selected == 0)
+					removeTask(true);
 		} else if (e.getSource() == btnControl) {
 			if(TabDownload.isStopAll()) {
 				Logger.println("停止任务中，请误操作");

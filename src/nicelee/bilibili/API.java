@@ -197,6 +197,7 @@ public class API {
 		String cookie = null;
 		File fingerprint = ResourcesUtil.sourceOf("./config/fingerprint.config");
 		if (fingerprint.exists()) {
+			ResourcesUtil.restrictFileToOwner(fingerprint);
 			cookie = ResourcesUtil.readAll(fingerprint);
 			Pattern p = Pattern.compile("b_nut=([^;]+)");
 			Matcher m = p.matcher(cookie);
@@ -217,15 +218,14 @@ public class API {
 				if (time + 5400000L < currentTime) {
 					String b_lsid = ResourcesUtil.randomHex(8) + "_" + Long.toHexString(currentTime).toUpperCase();
 					cookie = m.replaceFirst("b_lsid=" + b_lsid);
-					ResourcesUtil.write(fingerprint, cookie);
+					ResourcesUtil.writeSensitive(fingerprint, cookie);
 				}
 			}
 		}
 		if (cookie == null) {
 			cookie = genNewFingerprint();
-			ResourcesUtil.write(fingerprint, cookie);
+			ResourcesUtil.writeSensitive(fingerprint, cookie);
 		}
-		Logger.println(cookie);
 		return cookie;
 	}
 
@@ -256,13 +256,9 @@ public class API {
 		JSONObject p = new JSONObject();
 		p.put("payload", payload);
 		String param = p.toString();
-		Logger.println(payload);
-		Logger.println(param);
 		HashMap<String, String> h = headers.getCommonHeaders();
 		h.put("Content-type", "application/json;charset=UTF-8");
-		String result = util.postContent(url, h, param, HttpCookies.globalCookiesWithFingerprint());
-		Logger.println(result); // {"code":0,"message":"0","ttl":1,"data":{}}
-								// {"code":130212,"message":"130212","ttl":1,"data":null}
+		util.postContent(url, h, param, HttpCookies.globalCookiesWithFingerprint());
 	}
 
 	public static String genNewFingerprint() {
@@ -271,13 +267,19 @@ public class API {
 			long currentTime = System.currentTimeMillis();
 			// 获取 buvid3 b_nut i-wanna-go-back b_ut 有效期一年
 			HttpURLConnection conn = (HttpURLConnection) new URL("https://www.bilibili.com/").openConnection();
+			conn.setConnectTimeout(10000);
+			conn.setReadTimeout(10000);
 			conn.setRequestProperty("User-Agent", Global.userAgent);
-			conn.connect();
-			List<String> setCookie = conn.getHeaderFields().get("Set-Cookie");
-			setCookie = setCookie != null ? setCookie : conn.getHeaderFields().get("set-cookie");
-			for (String c : setCookie) {
-				String[] kv = c.split(";", 2)[0].split("=", 2);
-				kvMap.put(kv[0].trim(), kv[1].trim());
+			try {
+				conn.connect();
+				List<String> setCookie = conn.getHeaderFields().get("Set-Cookie");
+				setCookie = setCookie != null ? setCookie : conn.getHeaderFields().get("set-cookie");
+				for (String c : setCookie) {
+					String[] kv = c.split(";", 2)[0].split("=", 2);
+					kvMap.put(kv[0].trim(), kv[1].trim());
+				}
+			} finally {
+				conn.disconnect();
 			}
 			kvMap.put("i-wanna-go-back", "-1");
 			// 生成 b_lsid
@@ -293,10 +295,8 @@ public class API {
 			HttpRequestUtil util = new HttpRequestUtil();
 			HttpHeaders headers = new HttpHeaders();
 			String tempCookie = HttpCookies.map2CookieStr(kvMap);
-			Logger.println(tempCookie);
 			String r = util.getContent("https://api.bilibili.com/x/frontend/finger/spi", headers.getCommonHeaders(),
 					HttpCookies.convertCookies(tempCookie));
-			Logger.print(r);
 			String buvid4 = new JSONObject(r).getJSONObject("data").getString("b_4");
 			kvMap.put("buvid4", buvid4);
 			// TODO 获取 buvid_fp (浏览器指纹)

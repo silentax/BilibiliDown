@@ -16,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 
 import nicelee.ui.item.DownloadInfoPanel;
+import nicelee.ui.item.JOptionPane;
 import nicelee.ui.item.MJButton;
 import nicelee.ui.thread.DownloadExecutors;
 
@@ -172,11 +173,20 @@ public class TabDownload extends JPanel implements ActionListener {
 					btnDeleteAll.setEnabled(true);
 					stopAll = false;
 				}
-			}).start();
-		} else if (e.getSource() == btnDeleteAll) {
-			for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
-				dp.removeTask(true);
-			}
+				}).start();
+			} else if (e.getSource() == btnDeleteAll) {
+				if (!Global.downloadTaskList.isEmpty()) {
+					Object[] options = { "移除全部", "取消" };
+					int selected = JOptionPane.showOptionDialog(this,
+							"将移除全部下载任务，并删除未完成的 .part 临时文件。\n已完成的文件不会被删除。",
+							"确认移除全部任务", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE,
+							null, options, options[1]);
+					if (selected == 0) {
+						for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
+							dp.removeTask(true);
+						}
+					}
+				}
 		} else if (e.getSource() == btnDeleteDown) {
 			for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
 				dp.removeTask(false);
