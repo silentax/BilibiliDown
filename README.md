@@ -22,6 +22,7 @@ Bilibili 视频下载器，用于下载B站视频。
 - 旧版 Windows/Linux ffmpeg 自动下载使用固定 SHA-256 清单，校验成功前不会进入可执行路径
 - 旧应用内自更新已安全禁用；“检查更新”只提示访问本仓库 Releases，不会下载或替换 JAR
 - 旧 Release/MSI/第三方上传链已禁用；新的 JDK 21 MSI/DMG 发布方案见 `docs/SECURE_RELEASE_MIGRATION.md`
+- 外部 Java 源码/字节码插件已禁用；`parsers/`、`pushers/` 不再被编译或执行，迁移要求见 `docs/PLUGIN_SECURITY.md`
 - 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
 
 ### 启动
@@ -50,6 +51,7 @@ java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
 | Java HTTPS 证书太旧 | ⚠️ | 请使用 JDK 21 运行；后续安装包将内置运行时，避免依赖本机旧 Java |
 | 跳过 TLS 证书验证 | ✅ | 已移除 Trust-All 实现和配置入口，HTTPS/SMTP 使用 JVM 默认信任库与主机名校验 |
 | 旧版 SHA-1 自动更新 | ✅ | 默认禁用下载、解压和执行；暂时改为手动访问本仓库 Releases |
+| 动态 Java 源码插件 | ✅ | 禁止从应用目录编译或加载外部代码；内置组件保持可用 |
 
 ### 下载音频流程
 1. 粘贴 B站 URL（视频/收藏夹/UP主页面均可）

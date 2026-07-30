@@ -104,9 +104,18 @@ tasks.register('legacyUpdateSecurityTest', JavaExec) {
     mainClass = 'nicelee.test.security.LegacyUpdateSecurityTest'
 }
 
+tasks.register('sourcePluginSecurityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies that external Java source and bytecode plugins cannot execute.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.SourcePluginSecurityTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
-            tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest')
+            tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
+            tasks.named('sourcePluginSecurityTest')
 }
 
 tasks.named('jar') {

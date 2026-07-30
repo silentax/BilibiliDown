@@ -1,10 +1,7 @@
 package nicelee.bilibili;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -19,8 +16,7 @@ import java.util.jar.JarInputStream;
 
 import nicelee.bilibili.annotations.Bilibili;
 import nicelee.bilibili.annotations.Controller;
-import nicelee.bilibili.plugin.CustomClassLoader;
-import nicelee.bilibili.plugin.Plugin;
+import nicelee.bilibili.plugin.SourcePluginPolicy;
 import nicelee.bilibili.util.ResourcesUtil;
 
 public abstract class PackageScanLoader {
@@ -36,22 +32,7 @@ public abstract class PackageScanLoader {
 		validPusherClasses = new ArrayList<Class<?>>();
 		validParserClasses = new ArrayList<Class<?>>();
 		validDownloaderClasses = new ArrayList<Class<?>>();
-		// 扫描parsers文件夹，加载自定义类名
-		Plugin parserPlg = new Plugin("parsers", "nicelee.bilibili.parsers.impl");
-		CustomClassLoader ccloader = new CustomClassLoader();
-		File parserFolder = new File(ResourcesUtil.baseDirectory(), "parsers");
-		// 如果parsers.ini存在, 逐行读取类名, 按照顺序进行扫描
-		// 这是为了在jar包里的类加载生效之前使用, 替换原来的功能
-		// 大多数情况下不需要用到
-		File parserInit = new File(parserFolder, "parsers.ini");
-		loadTargetFolder(parserPlg, ccloader, parserFolder, parserInit);
-		
-		// 扫描pushers文件夹，加载自定义类名
-		Plugin pusherPlg = new Plugin("pushers", "nicelee.bilibili.pushers.impl");
-		File pusherFolder = new File(ResourcesUtil.baseDirectory(), "pushers");
-		File pusherInit = new File(pusherFolder, "pushers.ini");
-		loadTargetFolder(pusherPlg, ccloader, pusherFolder, pusherInit);
-		
+		SourcePluginPolicy.warnIfLegacyPluginDirectoriesPresent(ResourcesUtil.baseDirFile());
 		// 扫描包，加载 parser 类、downloader类、pusher类
 		PackageScanLoader pLoader = new PackageScanLoader() {
 			@Override
@@ -96,60 +77,6 @@ public abstract class PackageScanLoader {
 			}
 		};
 		pLoader.scanRoot("nicelee.server.controller");
-	}
-
-	private static void loadTargetFolder(Plugin plug, CustomClassLoader ccloader, File jFileFolder,
-			File initConfFile) {
-		if(initConfFile.exists()) {
-			try {
-				BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(initConfFile), "utf-8"));
-				String clazzName = reader.readLine();
-				while(clazzName != null) {
-					compileAndLoad(plug, ccloader, clazzName);
-					clazzName = reader.readLine();
-				}
-				reader.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		} else if(jFileFolder.exists()){
-			// 遍历文件进行扫描
-			for(File file: jFileFolder.listFiles()) {
-				String fileName = file.getName();
-				if(fileName.endsWith(".java")) {
-					String clazzName = fileName.substring(0, fileName.length() - 5);
-					compileAndLoad(plug, ccloader, clazzName);
-				}
-			}
-		}
-	}
-
-	/**
-	 *  编译并加载指定类
-	 * @param parserPlg
-	 * @param ccloader
-	 * @param clazzName
-	 */
-	private static void compileAndLoad(Plugin parserPlg, CustomClassLoader ccloader, String clazzName) {
-		// 编译类
-		if(parserPlg.isToCompile(clazzName)) {
-			parserPlg.compile(clazzName);
-		}
-		try {
-			// 加载类
-			System.out.printf("尝试加载自定义类: %s\r\n", clazzName);
-			Class<?> klass = parserPlg.loadClass(ccloader, clazzName);
-			Bilibili bili = klass.getAnnotation(Bilibili.class);
-			if (null != bili) {
-				if("parser".equals(bili.type())){
-					validParserClasses.add(klass);
-				}else if("pusher".equals(bili.type())){
-					validPusherClasses.add(klass);
-				}
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 	}
 
 	/**
