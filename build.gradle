@@ -96,9 +96,17 @@ tasks.register('ffmpegDownloadSecurityTest', JavaExec) {
     mainClass = 'nicelee.test.security.FFmpegDownloadSecurityTest'
 }
 
+tasks.register('legacyUpdateSecurityTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies that legacy self-update and release pipelines fail closed.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.LegacyUpdateSecurityTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
-            tasks.named('ffmpegDownloadSecurityTest')
+            tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest')
 }
 
 tasks.named('jar') {

@@ -21,6 +21,8 @@ import nicelee.ui.Global;
 public class ConfigUtil {
 	final static Pattern patternConfig = Pattern.compile("^[ ]*([0-9|a-z|A-Z|.|_]+)[ ]*=[ ]*([^ ]+.*$)");
 	final static String DEPRECATED_INSECURE_TLS_KEY = "bilibili.https.allowInsecure";
+	final static String DEPRECATED_GITHUB_TOKEN_KEY = "bilibili.github.token";
+	final static String DEPRECATED_UPDATE_KEY_PREFIX = "bilibili.download.update.";
 
 	/**
 	 * 根据.lock文件判断，程序是否在运行
@@ -137,7 +139,7 @@ public class ConfigUtil {
 					if (matcher.find()) {
 						String key = matcher.group(1);
 						if (isDeprecatedConfigKey(key)) {
-							System.out.printf("  ignored deprecated config key: %s (standard TLS is always enabled)%n", key);
+							System.out.printf("  ignored deprecated config key: %s%n", key);
 						} else {
 							Global.settings.put(key, matcher.group(2).trim());
 							System.out.printf("  loaded config key: %s\r\n", key);
@@ -152,7 +154,8 @@ public class ConfigUtil {
 	}
 
 	private static boolean isDeprecatedConfigKey(String key) {
-		return DEPRECATED_INSECURE_TLS_KEY.equals(key);
+		return DEPRECATED_INSECURE_TLS_KEY.equals(key) || DEPRECATED_GITHUB_TOKEN_KEY.equals(key)
+				|| key.startsWith(DEPRECATED_UPDATE_KEY_PREFIX);
 	}
 
 }

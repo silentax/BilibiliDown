@@ -22,7 +22,6 @@ import nicelee.ui.item.JOptionPane;
 import javax.swing.JRadioButtonMenuItem;
 
 import nicelee.bilibili.API;
-import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.enums.DownloadModeEnum;
 import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
@@ -265,22 +264,6 @@ public class MJMenuBar extends JMenuBar {
 				menuItems[0].setSelected(true);
 			}
 		}.build();
-		JMenu dUpdateMenuItem = new MJMenuWithRadioGroupBuilder("更新源选择", Global.updateSourceAvailable.split("\\|")) {
-			@Override
-			public void onItemSelected(int itemIndex, JRadioButtonMenuItem item) {
-				Global.updateSourceActive = item.getText();
-				Logger.println("当前使用的更新源切换为：" + Global.updateSourceActive);
-				
-			}
-			@Override
-			public void init(JRadioButtonMenuItem[] menuItems) {
-				for(JRadioButtonMenuItem item: menuItems) {
-					if(item.getText().equals(Global.updateSourceActive)) {
-						item.setSelected(true);
-					}
-				}
-			}
-		}.build();
 		JMenu dFFmpegMenuItem = new MJMenuWithRadioGroupBuilder("FFMPEG源选择", Global.ffmpegSourceAvailable.split("\\|")) {
 			@Override
 			public void onItemSelected(int itemIndex, JRadioButtonMenuItem item) {
@@ -305,7 +288,6 @@ public class MJMenuBar extends JMenuBar {
 		configMenu.add(dQNMenuItem);
 		configMenu.add(dQNQueryStrategyMenuItem);
 		configMenu.add(dBatchDownMenuItem);
-		configMenu.add(dUpdateMenuItem);
 		configMenu.add(dFFmpegMenuItem);
 		configMenu.addSeparator();
 		configMenu.add(settingsMenuItem);
@@ -316,18 +298,6 @@ public class MJMenuBar extends JMenuBar {
 		JMenuItem updateMenuItem = new JMenuItem("检查更新");
 		aboutMenu.add(infoMenuItem);
 		aboutMenu.add(updateMenuItem);
-		if(Global.githubToken != null && !Global.githubToken.isEmpty()) {
-			JMenuItem updateBetaMenuItem = new JMenuItem("更新Beta版本");
-			aboutMenu.add(updateBetaMenuItem);
-			updateBetaMenuItem.addActionListener(new ActionListener() {
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					VideoInfo avInfo = new INeedAV().getVideoDetail("BilibiliDown.PreRelease", 0, false);
-					DownloadRunnable downThread = new DownloadRunnable(avInfo, avInfo.getClips().get(1234L), 0);
-					Global.queryThreadPool.execute(downThread);
-				}
-			});
-		}
 		// 一键下载
 		batchDownload.addActionListener(new ActionListener() {
 			@Override
@@ -579,25 +549,8 @@ public class MJMenuBar extends JMenuBar {
 		updateMenuItem.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new Thread(new Runnable() {
-					@Override
-					public void run() {
-						frame.setTitle(frame.getTitle() + " 版本更新中");
-						try {
-							if (VersionManagerUtil.queryLatestVersion()) {
-								JOptionPane.showMessageDialog(null, "当前版本为 " + Global.version + " ，已是最新", "成功",
-										JOptionPane.PLAIN_MESSAGE);
-							} else {
-								VersionManagerUtil.downloadLatestVersion();
-
-							}
-						} catch (Exception e1) {
-							JOptionPane.showMessageDialog(null, "出现了异常，异常原因为：" + e1.toString(), "异常",
-									JOptionPane.PLAIN_MESSAGE);
-						}
-						frame.setTitle(frame.getTitle().replace(" 版本更新中", ""));
-					}
-				}, "更新线程").start();
+				JOptionPane.showMessageDialog(null, VersionManagerUtil.getManualUpdateMessage(), "安全更新提示",
+						JOptionPane.INFORMATION_MESSAGE);
 			}
 		});
 

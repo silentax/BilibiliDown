@@ -214,7 +214,7 @@ JDK 21、Gradle、JavaFX 和系统密钥库迁移作为后续独立变更实施�
 尚未完成或尚未验证：
 
 - 未在本轮执行真实 B站解析、音频下载、视频下载和完整 GUI 手工验收。
-- 全局 Trust-All TLS 已移除；动态源码插件、不可信自更新、SHA-1 发布链路仍需后续处理。
+- 全局 Trust-All TLS 已移除；不可信旧自更新与 SHA-1 发布链已默认禁用，动态源码插件仍需后续处理。
 - Swing EDT 违规、固定周期轮询、查询单线程和错误处理分散仍是流畅度与稳定性风险。
 - Cookie 尚未迁移到系统密钥库；当前 `0600` 只是过渡保护。
 - Gradle/JDK 21 双平台 CI 构建基线已完成；Java 8 手工构建暂时保留为回退路径。
@@ -249,4 +249,12 @@ JDK 21 双平台构建通过后，应用已删除全局 Trust-All TLS 实现和 
 
 macOS 与 Windows 缺失提示分别给出 Homebrew 和 WinGet 安装命令。旧有 Windows/Linux 自动下载已迁移到固定 SHA-256 清单，并改为暂存下载、校验后原子安装；摘要缺失或不匹配时安全失败，详见 `docs/FFMPEG_BINARY_MANIFEST.md`。
 
-剩余发布风险：二进制仍托管在原上游 Release，旧应用自更新和历史 Release/安装包工作流仍使用 SHA-1。完全独立发布前需要把经核验的二进制迁移到本仓库受控 Release，并重做 JDK 21 的 DMG/MSI 发布链。
+剩余发布风险：ffmpeg 二进制仍托管在原上游 Release，本仓库尚无自有 JDK 21 runtime、DMG/MSI、代码签名和公证。旧应用自更新、Release/MSI、Pre-release 和第三方上传链已安全禁用；完全独立发布前需要按 `docs/SECURE_RELEASE_MIGRATION.md` 迁移到本仓库受控资产。
+
+## 13. 旧更新与发布链隔离
+
+应用内更新策略改为 fail-closed：“检查更新”只显示本维护仓库 Releases 地址，不再联网查询或下载；正式版 ZIP、Beta artifact、解压替换 JAR 和重启更新的兼容入口均显式拒绝执行。旧更新源配置和 UI 选择项已移除。
+
+四个历史发布工作流及其 Release/MSI/第三方同步脚本已替换为带 `LEGACY_PIPELINE_DISABLED` 标记的安全失败占位，避免手动或路径提交误触发。新的发布设计必须使用 JDK 21 `jpackage`、本仓库受控资产、SHA-256、最小权限与人工 Release 门禁。
+
+这一阶段没有创建 Release，也没有向任何第三方上传内容。真实 Windows/macOS GUI、B站下载与安装包仍未验证，因此项目尚未达到完全独立发布条件。

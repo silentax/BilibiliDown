@@ -1,7 +1,5 @@
-* 优化：添加对url类型https://space.bilibili.com/[0-9]+/lists?sid=[0-9]+`的支持 #289
-* 修复：修复是否点赞的判断失效问题 #287
-* 修复：尝试修复返回412的问题 #295
-* 其它详见[V6.40...V6.41](https://github.com/nICEnnnnnnnLee/BilibiliDown/compare/V6.40...V6.41)
-<hr/>
+# 旧发布说明已停用
 
-如果你是Win64用户,且没有java环境，请下载附件`*.win_x64_jre11.release.zip`或 `*.win_x64.msi`
+本维护 Fork 的旧 Release/MSI 发布链已安全禁用。请勿通过修改本文件触发发布；当前文件不会触发 GitHub Actions。
+
+恢复正式发布前必须完成 `docs/SECURE_RELEASE_MIGRATION.md` 中的 JDK 21 双平台打包、SHA-256、签名、公证和人工门禁。

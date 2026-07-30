@@ -1,157 +1,19 @@
-# This workflow will build a package using Maven and then publish it to GitHub packages when a release is created
-# For more information see: https://github.com/actions/setup-java#apache-maven-with-a-settings-path
+name: DISABLED - Legacy Release
 
-name: Build Release
-
+# LEGACY_PIPELINE_DISABLED
+# 旧流程会下载非本仓库产物、使用 SHA-1 并向第三方发布。安全发布链完成前禁止恢复。
 on:
   workflow_dispatch:
-    inputs:
-      enable_sync_third_party:
-        description: '同步上传代码、附件到第三方？'
-        required: false
-        type: boolean
-        default: true
-        # 不是人为触发时，为空字符串
-  push:
-    branches:
-      - master
-    paths:
-      # Trigger only when src/** changes
-      - ".github/release.info"
-      
+
+permissions: {}
+
 jobs:
-  build:
-
+  legacy-disabled:
     runs-on: ubuntu-latest
-    outputs:
-      VERSION_NUMBER: ${{ steps.tag_latest.outputs.value }}
+    timeout-minutes: 1
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.ref }}
-        
-    - name: Set up JDK 1.8
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '8'  
-     
-    - name: Read tag_latest and Save build info
-      id: tag_latest
-      env:
-        GITHUB_REPO: ${{ github.repository }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-      run: |
-        python ./.github/scripts/read_version_and_save_build_info.py
-    
-    - name: Package Jar
-      run: |
-        chmod +x package.sh
-        ./package.sh
-        chmod +x .github/scripts/package_launcher.sh
-        ./.github/scripts/package_launcher.sh
-
-    - name: Test Jar
-      env:
-        VERSION_NUMBER: ${{ steps.tag_latest.outputs.value }}
-      run: |
-        chmod +x .github/scripts/test_jar.sh
-        ./.github/scripts/test_jar.sh
-
-    - name: ZIP files
-      env:
-        VERSION_NUMBER: ${{ steps.tag_latest.outputs.value }}
-      run: |
-        chmod +x .github/scripts/gen_zip_sha1_for_release.sh
-        ./.github/scripts/gen_zip_sha1_for_release.sh
-        
-    - name: Create Release
-      uses: softprops/action-gh-release@v2.0.6
-      with:
-        tag_name: V${{steps.tag_latest.outputs.value}}
-        name: BilibiliDown - v${{steps.tag_latest.outputs.value}}
-        body_path: ./.github/release.info
-        draft: false
-        prerelease: false
-        files: |
-          BilibiliDown.v${{steps.tag_latest.outputs.value}}.release.zip
-          BilibiliDown.v${{steps.tag_latest.outputs.value}}.release.zip.sha1
-          
-    - name: Upload release to supabase
-      env:
-        VERSION_NUMBER: ${{ steps.tag_latest.outputs.value }}
-        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      if: ${{ env.SUPABASE_ANON_KEY != '' && github.event.inputs.enable_sync_third_party != 'false'}}
-      run: |
-        chmod +x .github/scripts/upload_supabase.sh
-        ./.github/scripts/upload_supabase.sh     
-            
-    - name: Upload release to cloudinary
-      env:
-        CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
-        CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
-        ZIP_FILE_NAME: BilibiliDown.v${{steps.tag_latest.outputs.value}}.release.zip
-        SHA1_FILE_NAME: BilibiliDown.v${{steps.tag_latest.outputs.value}}.release.zip.sha1
-      if: ${{ env.CLOUDINARY_API_KEY != '' && env.CLOUDINARY_API_SECRET != '' && github.event.inputs.enable_sync_third_party != 'false'}}
-      run: |
-        chmod +x .github/scripts/upload_cloudinary.sh
-        ./.github/scripts/upload_cloudinary.sh              
-    
-    - name: Sync Push to Gitee
-      env:
-        GITEE_AUTH: ${{ secrets.GITEE_AUTH }}
-      if: ${{ env.GITEE_AUTH != '' && github.event.inputs.enable_sync_third_party != 'false'}}
-      run: |
-        chmod +x .github/scripts/sync_push_to_gitee.sh
-        ./.github/scripts/sync_push_to_gitee.sh
-        
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: release
-        path: BilibiliDown.v${{steps.tag_latest.outputs.value}}.win_x64_jre11.release.zip
-        retention-days: 1
-        
-  # 生成win64 安装包
-  build_win64_msi:
-    needs: build
-    name: Build win64 msi
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release
-        path: win_msi
-        
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        
-    - name: Build MSI
-      env:
-        VERSION_NUMBER: ${{needs.build.outputs.VERSION_NUMBER}}
-        VERSION_NUMBER_TAIL: 0
-        JAVA_TOOL_OPTIONS: '-Duser.region=CN -Duser.language=zh'
-        PYTHONIOENCODING: utf-8
-        PYTHONLEGACYWINDOWSSTDIO: utf-8
-      run:  |
-        cd win_msi
-        # pip install requests
-        python ../.github/scripts/installer-win/win64_msi.py
-        move target/BilibiliDown-1.${{needs.build.outputs.VERSION_NUMBER}}.0.msi        target/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64.msi
-        move target/BilibiliDown-1.${{needs.build.outputs.VERSION_NUMBER}}.0.msi.sha1   target/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64.msi.sha1
-        
-    - name: Upload MSI,ZIP File to release asset
-      uses: softprops/action-gh-release@v2.0.6
-      with:
-        tag_name: V${{needs.build.outputs.VERSION_NUMBER}}
-        name: BilibiliDown - v${{needs.build.outputs.VERSION_NUMBER}}
-        files: |
-          win_msi/target/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64.msi
-          win_msi/target/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64.msi.sha1
-          win_msi/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64_jre11.release.zip
-          win_msi/BilibiliDown.v${{needs.build.outputs.VERSION_NUMBER}}.win_x64_jre11.release.zip.sha1
+      - name: Refuse unsafe legacy release
+        shell: bash
+        run: |
+          echo "::error::旧 Release 流程已禁用；请按 docs/SECURE_RELEASE_MIGRATION.md 重建发布链。"
+          exit 1

@@ -173,11 +173,6 @@ public class Global {
 	// 临时文件相关
 	@Config(key = "bilibili.restrictTempMode", defaultValue = "true", eq_true = "on", valids = { "on", "off" })
 	public static boolean restrictTempMode;
-	// 更新源相关
-	@Config(key = "bilibili.download.update.sources", defaultValue = "Github") // 可用的更新源
-	public static String updateSourceAvailable;
-	@Config(key = "bilibili.download.update.sources.active", note = "生效的更新源", defaultValue = "Github")
-	public static String updateSourceActive;
 	// FFMPEG 下载
 	@Config(key = "bilibili.download.ffmpeg.sources", defaultValue = "Github") // 可用的ffmpeg源
 	public static String ffmpegSourceAvailable;
@@ -235,8 +230,6 @@ public class Global {
 	public static String userAgentFingerprint = "";
 	@Config(key = "bilibili.userAgent.pc.payload", note = "截取自api请求https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi", defaultValue = "")
 	public static String userAgentPayload = "";
-	@Config(key = "bilibili.github.token", note = "Github API鉴权token", defaultValue = "", warning = false)
-	public static String githubToken; // 一般情况下，用于Github API鉴权, 暂只用于更新Beta版本
 	final public static HashMap<String, String> settings = new LinkedHashMap<>();
 	final public static HashSet<String> settingsMustCreateManualy = new HashSet<>();
 
@@ -389,12 +382,6 @@ public class Global {
 		settingsMustCreateManualy.add("bilibili.menu.download.plan");
 		settingsMustCreateManualy.add("bilibili.system.properties.jre11.override");
 		settingsMustCreateManualy.add("bilibili.system.properties.jre11");
-		settingsMustCreateManualy.add("bilibili.download.update.sources");
-		settingsMustCreateManualy.add("bilibili.download.update.patterns.Cloudinary");
-		settingsMustCreateManualy.add("bilibili.download.update.patterns.Supabase");
-		settingsMustCreateManualy.add("bilibili.download.update.patterns.Twicpics");
-		settingsMustCreateManualy.add("bilibili.download.update.patterns.Github");
-		settingsMustCreateManualy.add("bilibili.download.update.patterns.Bitbucket");
 		settingsMustCreateManualy.add("bilibili.download.ffmpeg.sources");
 		settingsMustCreateManualy.add("bilibili.download.ffmpeg.url.Cloudinary");
 		settingsMustCreateManualy.add("bilibili.download.ffmpeg.url.Supabase");

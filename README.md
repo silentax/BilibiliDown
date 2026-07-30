@@ -20,6 +20,8 @@ Bilibili 视频下载器，用于下载B站视频。
 - ffmpeg（用于音视频合并与转换）：macOS 使用 `brew install ffmpeg`，Windows 使用 `winget install Gyan.FFmpeg`
 - 应用会依次探测配置路径、程序目录、系统 `PATH`，并兼容 Homebrew、MacPorts、WinGet 与 Chocolatey 常见路径
 - 旧版 Windows/Linux ffmpeg 自动下载使用固定 SHA-256 清单，校验成功前不会进入可执行路径
+- 旧应用内自更新已安全禁用；“检查更新”只提示访问本仓库 Releases，不会下载或替换 JAR
+- 旧 Release/MSI/第三方上传链已禁用；新的 JDK 21 MSI/DMG 发布方案见 `docs/SECURE_RELEASE_MIGRATION.md`
 - 项目路径：下文以 `/path/to/BilibiliDown` 代指本项目根目录
 
 ### 启动
@@ -47,6 +49,7 @@ java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
 | ffmpeg 缺失 | ✅ | Windows/macOS 自动探测；未找到时显示对应平台的安装命令 |
 | Java HTTPS 证书太旧 | ⚠️ | 请使用 JDK 21 运行；后续安装包将内置运行时，避免依赖本机旧 Java |
 | 跳过 TLS 证书验证 | ✅ | 已移除 Trust-All 实现和配置入口，HTTPS/SMTP 使用 JVM 默认信任库与主机名校验 |
+| 旧版 SHA-1 自动更新 | ✅ | 默认禁用下载、解压和执行；暂时改为手动访问本仓库 Releases |
 
 ### 下载音频流程
 1. 粘贴 B站 URL（视频/收藏夹/UP主页面均可）
@@ -75,8 +78,6 @@ java -Dfile.encoding=utf-8 -jar build\libs\INeedBiliAV.jar
 * **上游历史文档**: <https://nICEnnnnnnnLee.github.io/BilibiliDown/guide/quick-start/download>   
 * **GitHub**: [https://github.com/silentax/BilibiliDown](https://github.com/silentax/BilibiliDown)  
 * **Github Release**: <https://github.com/silentax/BilibiliDown/releases>  
-* **Bitbucket**: [https://bitbucket.org/NiceLeeee/BilibiliDown](https://bitbucket.org/NiceLeeee/BilibiliDown)  
-* **Gitee码云**: [https://gitee.com/NiceLeee/BilibiliDown](https://gitee.com/NiceLeee/BilibiliDown)  
 * [**更新日志**](https://github.com/silentax/BilibiliDown/blob/master/UPDATE.md)
 
 
