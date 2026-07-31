@@ -3,6 +3,8 @@ package nicelee.server.controller;
 import java.io.BufferedWriter;
 import java.io.OutputStream;
 
+import org.json.JSONObject;
+
 import nicelee.bilibili.annotations.Controller;
 import nicelee.bilibili.annotations.Value;
 import nicelee.server.core.PathDealer;
@@ -21,14 +23,15 @@ public class ControllerLogin {
 		String validate = PathDealer.getValue(param, "validate");
 		try {
 			if (token != null && challenge != null && seccode != null && validate != null) {
-				String result = DialogLogin.Instance.login(token, challenge, validate, seccode);
+				DialogLogin dialog = DialogLogin.Instance;
+				String result = dialog == null ? "登录窗口已关闭" : dialog.login(token, challenge, validate, seccode);
 				ResponseUtil.response200OK(out);
 				ResponseUtil.responseHeader(out, "Content-Type", "application/json;charset=UTF-8");
 				ResponseUtil.endResponseHeader(out);
 				if (result == null) {
 					out.write("{\"code\":0, \"message\": \"ok\"}");
 				} else {
-					out.write("{\"code\":777, \"message\": \"" + result + "\"}");
+					out.write("{\"code\":777, \"message\": " + JSONObject.quote(result) + "}");
 				}
 				ResponseUtil.endResponse(out);
 			} else {
@@ -52,11 +55,17 @@ public class ControllerLogin {
 		String validate = PathDealer.getValue(param, "validate");
 		try {
 			if (token != null && challenge != null && seccode != null && validate != null) {
-				DialogSMSLogin.Instance.sendSMS(token, challenge, validate, seccode);
+				DialogSMSLogin dialog = DialogSMSLogin.Instance;
+				String result = dialog == null ? "登录窗口已关闭"
+						: dialog.sendSMS(token, challenge, validate, seccode);
 				ResponseUtil.response200OK(out);
 				ResponseUtil.responseHeader(out, "Content-Type", "application/json;charset=UTF-8");
 				ResponseUtil.endResponseHeader(out);
-				out.write("{\"code\":0, \"message\": \"ok\"}");
+				if (result == null) {
+					out.write("{\"code\":0, \"message\": \"ok\"}");
+				} else {
+					out.write("{\"code\":777, \"message\": " + JSONObject.quote(result) + "}");
+				}
 				ResponseUtil.endResponse(out);
 			} else {
 				ResponseUtil.response200OK(out);

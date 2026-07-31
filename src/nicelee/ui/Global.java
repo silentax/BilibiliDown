@@ -151,8 +151,6 @@ public class Global {
 	public static int serverPort = 8787;
 	@Config(key = "bilibili.user.userName", defaultValue = "", warning = false)
 	public static String userName;
-	@Config(key = "bilibili.user.password", defaultValue = "", warning = false)
-	public static String password;
 	@Config(key = "bilibili.user.delete", defaultValue = "true", valids = { "true", "false" })
 	public static boolean deleteUserFile;
 	@Config(key = "bilibili.user.login", note = "登录方式 qr/pwd/sms", defaultValue = "qr", valids = { "pwd", "qr", "sms" }) // note = "登录方式", 

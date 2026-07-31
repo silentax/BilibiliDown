@@ -319,3 +319,27 @@ java -Djava.awt.headless=true -jar build/libs/INeedBiliAV.jar -v
 - `uiExperienceTest` 新增作品页布局、分隔面板、加载进度、分集生成进度、成功/失败按钮状态及分集卡片布局回归。
 
 仍需人工验收：真实 Windows/macOS 下的窗口窄化、分隔条拖动、系统字体缩放、超长标题、数百个真实分 P、封面 CDN 超时及连续切换预览图行为均为 `NOT VERIFIED`。作品详情与下载主链路已具备自动回归保护，后续重点转向设置页、登录窗口和真实端到端下载验收。
+
+## 18. 登录窗口响应式与凭据生命周期里程碑
+
+截至 2026-07-31，密码登录和短信登录完成响应式布局、后台网络调度与凭据生命周期治理：
+
+- 两个登录窗口恢复 Windows/macOS 系统原生标题栏，改用 BorderLayout/GridBagLayout 和系统 Look and Feel 尺寸计算；移除绝对定位、自绘关闭按钮和自定义拖动。
+- 获取极验验证码、发送短信和短信登录均在后台线程执行；本地 HTTP 回调线程只处理网络请求，所有 Swing 状态经 SwingDispatch 回到 EDT，操作期间按钮和输入框提供明确忙碌状态。
+- 密码框不再使用 `123456` 伪默认值，也不再通过 `Global` 或配置文件长期保存密码。密码只以 `char[]` 暂存，并在登录成功、失败、异常、验证码替换或窗口关闭时覆盖清零。
+- 暂存密码与本次验证码 token 绑定，旧验证码回调不能消费新密码；窗口关闭后丢弃迟到的验证码和登录 UI 回调。
+- 旧 `bilibili.user.password` 配置被标记为废弃：读取时忽略，后续保存配置时清理，避免历史明文密码继续生效。
+- 密码登录与短信登录的意外运行时异常会转换为可见失败状态，并在 `finally` 中恢复任务标记和控件，不再让窗口永久停留在禁用状态。
+- 本地回调在登录窗口已关闭、验证码失效或短信发送失败时返回明确错误码；错误消息进行 JSON 转义，不再把失败误报为成功。
+- 登录窗口关闭时异步停止仅监听 loopback 的 SocketServer；即使服务器尚未完成端口绑定也可安全停止，避免关闭窗口阻塞 EDT。
+- 新增 `CredentialSecurityTest` 并纳入 Gradle `check`，覆盖旧密码配置清理、全局密码字段移除、登录窗口旧布局/凭据模式防回退、窗口关闭回调错误响应和服务器绑定前关闭。
+
+本里程碑的自动验收命令：
+
+```bash
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 credentialSecurityTest uiExperienceTest
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 clean check
+bash package.sh
+```
+
+以上命令已通过；Gradle 完整检查共执行 15 个任务，JAR headless smoke test 输出 `v6.41`，兼容打包脚本成功。真实密码登录、短信发送与登录、浏览器极验回调，以及登录窗口在真实 Windows/macOS 的缩放、系统字体和原生关闭行为仍为 `NOT VERIFIED`。B站可能继续调整登录接口或风控策略，失败时应优先使用二维码登录；下一轮重点治理设置页的固定宽度布局、组件三元组绑定和 EDT 同步保存。

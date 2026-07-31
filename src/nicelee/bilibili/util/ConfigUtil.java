@@ -23,6 +23,7 @@ public class ConfigUtil {
 	final static String DEPRECATED_INSECURE_TLS_KEY = "bilibili.https.allowInsecure";
 	final static String DEPRECATED_GITHUB_TOKEN_KEY = "bilibili.github.token";
 	final static String DEPRECATED_UPDATE_KEY_PREFIX = "bilibili.download.update.";
+	final static String DEPRECATED_PASSWORD_KEY = "bilibili.user.password";
 
 	/**
 	 * 根据.lock文件判断，程序是否在运行
@@ -155,7 +156,7 @@ public class ConfigUtil {
 
 	private static boolean isDeprecatedConfigKey(String key) {
 		return DEPRECATED_INSECURE_TLS_KEY.equals(key) || DEPRECATED_GITHUB_TOKEN_KEY.equals(key)
-				|| key.startsWith(DEPRECATED_UPDATE_KEY_PREFIX);
+				|| DEPRECATED_PASSWORD_KEY.equals(key) || key.startsWith(DEPRECATED_UPDATE_KEY_PREFIX);
 	}
 
 }

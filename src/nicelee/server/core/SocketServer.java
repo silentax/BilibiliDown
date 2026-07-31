@@ -18,9 +18,9 @@ public class SocketServer {
 
 	int portServerListening;
 
-	boolean isRun = true;
-	public static ExecutorService httpThreadPool;
-	ServerSocket serverSocket;
+	volatile boolean isRun = true;
+	private final ExecutorService httpThreadPool;
+	volatile ServerSocket serverSocket;
 
 	public SocketServer(int portServerListening) {
 		this.portServerListening = portServerListening;
@@ -36,13 +36,16 @@ public class SocketServer {
 	 *  关闭服务器
 	 */
 	public void stopServer() {
+		isRun = false;
+		ServerSocket activeServer = serverSocket;
 		try {
-			isRun = false;
-			serverSocket.close();
+			if (activeServer != null)
+				activeServer.close();
 		} catch (IOException e) {
 			//e.printStackTrace();
 		}
-		System.out.println("正在关闭 SocketServer: 服务器... ");
+		if (activeServer != null)
+			System.out.println("正在关闭 SocketServer: 服务器... ");
 	}
 
 	/**

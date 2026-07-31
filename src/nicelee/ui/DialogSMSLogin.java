@@ -3,378 +3,397 @@ package nicelee.ui;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Desktop;
-import java.awt.Font;
-import java.awt.Image;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.awt.event.MouseMotionListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.net.URI;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
-import nicelee.ui.item.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.border.EmptyBorder;
 
 import org.json.JSONObject;
 
-import javax.swing.JDialog;
-
 import nicelee.bilibili.INeedLogin;
-import nicelee.bilibili.util.Logger;
 import nicelee.server.core.SocketServer;
+import nicelee.ui.item.JOptionPane;
+import nicelee.ui.item.MJButton;
+import nicelee.ui.util.SwingDispatch;
 
-public class DialogSMSLogin extends JDialog implements FocusListener, MouseListener, MouseMotionListener {
+/**
+ * 短信登录窗口。验证码和登录请求均在后台执行。
+ */
+public class DialogSMSLogin extends JDialog {
 
-	public static DialogSMSLogin Instance;
-	/**
-	 * 
-	 */
 	private static final long serialVersionUID = 3741671572332334944L;
+	private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+(\\d{1,3}) +(\\d+)$");
 
-	public static void main(String[] args) {
-		try {
-//			System.setProperty("proxyHost", "127.0.0.1");
-//			System.setProperty("proxyPort", "8888");
-			DialogSMSLogin dialog = new DialogSMSLogin(new INeedLogin());
-			dialog.init();
-			Logger.println("-----------------");
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+	public static volatile DialogSMSLogin Instance;
 
-	final static String tips = "请输入手机号(e.g. +86 18812344321)";
-	final static Color colorLostFocus = Color.getHSBColor(100, 100, 100);
-	final static Color colorGainFocus = Color.white;
+	private final INeedLogin inl;
+	private final JTextField phoneField = new JTextField();
+	private final JTextField smsCodeField = new JTextField();
+	private final JButton captchaButton = new MJButton("获取短信验证码");
+	private final JButton loginButton = new MJButton("登录");
+	private final JLabel statusLabel = new JLabel(" ", SwingConstants.CENTER);
+	private final AtomicBoolean cleanupStarted = new AtomicBoolean();
 
-	private Point pressedPoint;// 记录鼠标按下时的位置
-	private JButton btnClose;
-
-	INeedLogin inl;
-	JTextField jtUserName = new JTextField(tips);
-	JTextField jtSMSCode = new JTextField();
-	JLabel lbGetSMS = new JLabel("获取短信验证码");
-	JLabel lbLogin = new JLabel("登录");
-	JLabel lbTips = new JLabel("");
-	boolean isRefreshingCaptcha = false;
-	boolean isLogging = false;
-
-	SocketServer socketServer;
-	String countryCode, phoneNumber, captchaKey;
+	private volatile boolean refreshingCaptcha;
+	private volatile boolean sendingSms;
+	private volatile boolean loggingIn;
+	private volatile boolean closing;
+	private volatile SocketServer socketServer;
+	private volatile String countryCode;
+	private volatile String phoneNumber;
+	private volatile String captchaKey;
+	private volatile String pendingCaptchaToken;
 
 	public DialogSMSLogin(INeedLogin inl) {
 		this.inl = inl;
 	}
 
-	public void init() {
-		new Thread(new Runnable() {
+	public static void main(String[] args) {
+		SwingUtilities.invokeLater(new Runnable() {
 			@Override
 			public void run() {
-				socketServer = new SocketServer(Global.serverPort);
-				socketServer.startServer();
-			}
-		}, "SMS登录server").start();
-		Instance = this;
-		setAlwaysOnTop(true);
-		setResizable(false);
-		setSize(522, 300);
-		setUndecorated(true);
-		this.setLocationRelativeTo(null);
-		// setBounds(400, 100, DIALOG_WIDTH,DIALOG_HEIGHT);
-		getContentPane().setLayout(new BorderLayout());
-
-		JPanel panel = new JPanel();
-		// panel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		panel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1, true));
-		panel.setBackground(Color.WHITE);
-
-		initSysButton(panel);
-		ImageIcon icon = new ImageIcon(DialogSMSLogin.class.getResource("/resources/banner.jpg"));
-		icon = new ImageIcon(icon.getImage().getScaledInstance(520, 110, Image.SCALE_SMOOTH));
-		JLabel label = new JLabel(icon);
-		label.setIcon(icon);
-		label.setBounds(1, 1, 520, 90);
-		panel.add(label);
-
-		Font font = new Font(Font.SERIF, Font.PLAIN, 18); // "system"
-		Insets insets = new Insets(2, 10, 2, 0);
-		jtUserName.setBounds(50, 80, 420, 40);
-		jtSMSCode.setBounds(50, 130, 200, 40);
-		jtUserName.setBackground(colorLostFocus);
-		jtSMSCode.setBackground(colorLostFocus);
-		jtUserName.setMargin(insets);
-		jtSMSCode.setMargin(insets);
-		jtUserName.setFont(font);
-		jtSMSCode.setFont(font);
-
-		lbGetSMS.setBounds(270, 130, 200, 40);
-		lbGetSMS.setHorizontalAlignment(SwingConstants.CENTER);
-		lbGetSMS.setBackground(Color.LIGHT_GRAY);
-		lbGetSMS.setOpaque(true);
-		lbGetSMS.setFont(font);
-
-		lbLogin.setBounds(50, 200, 420, 40);
-		lbLogin.setHorizontalAlignment(SwingConstants.CENTER);
-		lbLogin.setBackground(Color.LIGHT_GRAY);
-		// lbLogin.setForeground(Color.BLUE);
-		lbLogin.setOpaque(true);
-		lbLogin.setFont(font);
-		// lbLogin.setBorder(BorderFactory.createLineBorder(Color.red));
-
-		lbTips.setBounds(50, 250, 420, 40);
-		lbTips.setHorizontalAlignment(SwingConstants.CENTER);
-		lbTips.setForeground(Color.RED);
-		// lbTips.setFont(font);
-		panel.add(jtUserName);
-		panel.add(jtSMSCode);
-		panel.add(lbGetSMS);
-		panel.add(lbLogin);
-		panel.add(lbTips);
-
-		jtUserName.addFocusListener(this);
-		lbGetSMS.addMouseListener(this);
-		lbLogin.addMouseListener(this);
-		getContentPane().add(panel, BorderLayout.CENTER);
-		panel.setLayout(null);
-
-		// 根据参数初始化
-		if (Global.userName != null) {
-			jtUserName.setText(Global.userName);
-		}
-		this.addWindowListener(new java.awt.event.WindowAdapter() {
-			public void windowOpened(java.awt.event.WindowEvent evt) {
-				lbLogin.requestFocus();
+				new DialogSMSLogin(new INeedLogin()).init();
 			}
 		});
+	}
 
-		this.addMouseMotionListener(this);
-		this.addMouseListener(this);
-		this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-		this.addWindowListener(new WindowAdapter() {
-			public void windowClosing(WindowEvent e) {
-				super.windowClosing(e);
-				new Thread(new Runnable() {
+	public void init() {
+		Instance = this;
+		startCallbackServer();
+		setTitle("BilibiliDown - 短信登录");
+		setModal(true);
+		setAlwaysOnTop(true);
+		setResizable(true);
+		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+		setContentPane(createContentPanel());
+		getRootPane().setDefaultButton(loginButton);
+		pack();
+		setMinimumSize(new Dimension(480, 350));
+		setLocationRelativeTo(null);
+		if (Global.userName != null && Global.userName.trim().startsWith("+")) {
+			phoneField.setText(Global.userName);
+		}
+		setVisible(true);
+	}
+
+	private JPanel createContentPanel() {
+		JPanel root = new JPanel(new BorderLayout(0, 16));
+		root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(205, 210, 216)),
+				new EmptyBorder(16, 24, 20, 24)));
+		root.setBackground(Color.WHITE);
+
+		ImageIcon banner = new ImageIcon(DialogSMSLogin.class.getResource("/resources/banner.jpg"));
+		root.add(new JLabel(banner, SwingConstants.CENTER), BorderLayout.NORTH);
+
+		JPanel form = new JPanel(new GridBagLayout());
+		form.setOpaque(false);
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.insets = new Insets(5, 5, 5, 5);
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+
+		constraints.gridx = 0;
+		constraints.gridy = 0;
+		constraints.weightx = 0.0;
+		form.add(new JLabel("手机号"), constraints);
+		constraints.gridx = 1;
+		constraints.weightx = 1.0;
+		phoneField.setToolTipText("格式示例：+86 18812344321");
+		form.add(phoneField, constraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 1;
+		constraints.weightx = 0.0;
+		form.add(new JLabel("短信验证码"), constraints);
+		constraints.gridx = 1;
+		constraints.weightx = 1.0;
+		form.add(smsCodeField, constraints);
+
+		JPanel actions = new JPanel(new GridBagLayout());
+		actions.setOpaque(false);
+		GridBagConstraints actionConstraints = new GridBagConstraints();
+		actionConstraints.gridx = 0;
+		actionConstraints.weightx = 1.0;
+		actionConstraints.fill = GridBagConstraints.HORIZONTAL;
+		actionConstraints.insets = new Insets(0, 0, 0, 5);
+		captchaButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				queryCaptchaInBackground();
+			}
+		});
+		actions.add(captchaButton, actionConstraints);
+		actionConstraints.gridx = 1;
+		actionConstraints.insets = new Insets(0, 5, 0, 0);
+		loginButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				loginInBackground();
+			}
+		});
+		actions.add(loginButton, actionConstraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 2;
+		constraints.gridwidth = 2;
+		constraints.weightx = 1.0;
+		form.add(actions, constraints);
+
+		constraints.gridy = 3;
+		statusLabel.setForeground(new Color(80, 80, 80));
+		form.add(statusLabel, constraints);
+		root.add(form, BorderLayout.CENTER);
+		return root;
+	}
+
+	private void startCallbackServer() {
+		Thread serverThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				SocketServer server = new SocketServer(Global.serverPort);
+				socketServer = server;
+				if (!closing) {
+					server.startServer();
+				}
+			}
+		}, "Thread-SmsLoginServer");
+		serverThread.setDaemon(true);
+		serverThread.start();
+	}
+
+	private void queryCaptchaInBackground() {
+		if (refreshingCaptcha || sendingSms || loggingIn) {
+			return;
+		}
+		Matcher matcher = PHONE_PATTERN.matcher(phoneField.getText() == null ? "" : phoneField.getText().trim());
+		if (!matcher.matches()) {
+			showStatus("手机号格式应为：+国际区号 手机号码", true);
+			return;
+		}
+		countryCode = matcher.group(1);
+		phoneNumber = matcher.group(2);
+		Global.userName = "+" + countryCode + " " + phoneNumber;
+		captchaKey = null;
+		pendingCaptchaToken = null;
+		refreshingCaptcha = true;
+		setControlsBusy(true, "正在获取验证码...");
+
+		Thread captchaThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					JSONObject geetest = inl.getGeetest();
+					String token = geetest.getString("token");
+					String gt = geetest.getJSONObject("geetest").getString("gt");
+					String challenge = geetest.getJSONObject("geetest").getString("challenge");
+					if (closing) {
+						return;
+					}
+					pendingCaptchaToken = token;
+					String url = String.format(
+							"http://localhost:%d/static/index.html?token=%s&gt=%s&challenge=%s&type=sms",
+							Global.serverPort, token, gt, challenge);
+					openCaptchaUrl(url);
+					showStatus("请在浏览器完成验证码", false);
+				} catch (Exception error) {
+					pendingCaptchaToken = null;
+					showStatus("验证码获取失败，请检查网络或端口占用", true);
+				} finally {
+					refreshingCaptcha = false;
+					setControlsBusy(false, null);
+				}
+			}
+		}, "Thread-SmsCaptcha");
+		captchaThread.setDaemon(true);
+		captchaThread.start();
+	}
+
+	private void openCaptchaUrl(final String url) throws Exception {
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+			Desktop.getDesktop().browse(new URI(url));
+			return;
+		}
+		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+		clipboard.setContents(new StringSelection(url), null);
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				JOptionPane.showMessageDialog(DialogSMSLogin.this,
+						"当前系统无法自动打开浏览器。验证码地址已复制到剪贴板。", "请注意",
+						JOptionPane.WARNING_MESSAGE);
+			}
+		});
+	}
+
+	/** 由本地验证码回调线程调用。 */
+	public synchronized String sendSMS(String token, String challenge, String validate, String seccode) {
+		if (closing) {
+			return "登录窗口已关闭";
+		}
+		if (sendingSms || pendingCaptchaToken == null || !pendingCaptchaToken.equals(token)) {
+			showStatus("验证码已失效，请重新获取", true);
+			return "验证码已失效，请重新获取";
+		}
+		sendingSms = true;
+		setControlsBusy(true, "正在发送短信验证码...");
+		try {
+			JSONObject response = inl.sendSMS(countryCode, phoneNumber, token, challenge, validate, seccode);
+			if (closing) {
+				return "登录窗口已关闭";
+			}
+			if (response == null || response.optJSONObject("data") == null) {
+				throw new IllegalStateException("短信接口未返回有效数据");
+			}
+			captchaKey = response.getJSONObject("data").getString("captcha_key");
+			pendingCaptchaToken = null;
+			showStatus("短信验证码已经发送", false);
+			return null;
+		} catch (Exception error) {
+			captchaKey = null;
+			showStatus("短信验证码发送失败，请重新尝试", true);
+			return "短信验证码发送失败，请重新尝试";
+		} finally {
+			sendingSms = false;
+			setControlsBusy(false, null);
+		}
+	}
+
+	private void loginInBackground() {
+		if (refreshingCaptcha || sendingSms || loggingIn) {
+			return;
+		}
+		final String code = smsCodeField.getText() == null ? "" : smsCodeField.getText().trim();
+		if (captchaKey == null) {
+			showStatus("请先获取短信验证码", true);
+			return;
+		}
+		if (code.isEmpty()) {
+			showStatus("短信验证码不能为空", true);
+			return;
+		}
+		loggingIn = true;
+		setControlsBusy(true, "正在登录...");
+		final String loginCountryCode = countryCode;
+		final String loginPhoneNumber = phoneNumber;
+		final String loginCaptchaKey = captchaKey;
+		Thread loginThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				String result;
+				try {
+					result = inl.loginSMS(loginCountryCode, loginPhoneNumber, code, loginCaptchaKey);
+				} catch (RuntimeException error) {
+					result = "登录失败，请检查网络后重试";
+				} finally {
+					loggingIn = false;
+				}
+				if (closing) {
+					return;
+				}
+				final String loginResult = result;
+				SwingDispatch.runLater(new Runnable() {
 					@Override
 					public void run() {
-						Logger.println("socketServer 关闭中...");
-						try {
-							Thread.sleep(2000);
-						} catch (InterruptedException e) {
+						if (closing) {
+							return;
 						}
-						if (socketServer != null)
-							socketServer.stopServer();
+						if (loginResult == null) {
+							showStatus("登录成功", false);
+							Global.isLogin = true;
+							dispose();
+						} else {
+							showStatus(loginResult, true);
+							setControlsBusy(false, null);
+						}
 					}
-				}, "Thread to shutdown server").start();
+				});
+			}
+		}, "Thread-SmsLogin");
+		loginThread.setDaemon(true);
+		loginThread.start();
+	}
+
+	private void setControlsBusy(final boolean busy, final String status) {
+		if (closing) {
+			return;
+		}
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (closing) {
+					return;
+				}
+				captchaButton.setEnabled(!busy);
+				loginButton.setEnabled(!busy);
+				phoneField.setEnabled(!busy);
+				smsCodeField.setEnabled(!busy);
+				if (status != null) {
+					showStatus(status, false);
+				}
 			}
 		});
-
-		this.setModal(true);
-		this.setVisible(true);
 	}
 
-	/**
-	 * 初始化关闭按钮
-	 */
-	private void initSysButton(JPanel panel) {
-		// 添加关闭按钮
-		btnClose = new JButton();
-		btnClose.setRolloverIcon(new ImageIcon(this.getClass().getResource("/resources/xh.jpg")));
-		btnClose.setFocusPainted(false);
-		btnClose.setBorderPainted(false);
-		btnClose.setContentAreaFilled(false);
-		btnClose.setOpaque(true);
-		ImageIcon imgx = new ImageIcon(this.getClass().getResource("/resources/x.jpg"));
-		btnClose.setIcon(imgx);
-		btnClose.setBounds(490, 5, 20, 20);
-		panel.add(btnClose);
-		// 实现功能 - 最大化
-		btnClose.addMouseListener(this);
-	}
-
-	/**
-	 * 刷新验证码
-	 */
-	private void queryCaptcha() {
-		Logger.println("刷新验证码");
-		isRefreshingCaptcha = true;
-		lbTips.setText("");
-		if (jtUserName.hasFocus()) {
-			Global.userName = jtUserName.getText();
+	private void showStatus(final String message, final boolean error) {
+		if (closing) {
+			return;
 		}
-		if (Global.userName == null || Global.userName.isEmpty()) {
-			lbTips.setText("输入不能为空！");
-		} else {
-			try {
-				JSONObject geetest = inl.getGeetest();
-				String token = geetest.getString("token");
-				String gt = geetest.getJSONObject("geetest").getString("gt");
-				String challenge = geetest.getJSONObject("geetest").getString("challenge");
-				String url = String.format("http://localhost:%d/static/index.html?token=%s&gt=%s&challenge=%s&type=sms",
-						Global.serverPort, token, gt, challenge);
-				final boolean browseSupported = Desktop.getDesktop().isSupported(Desktop.Action.BROWSE);
-				if (browseSupported)
-					Desktop.getDesktop().browse(new URI(url));
-				else {
-					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-					Transferable trans = new StringSelection(url);
-					clipboard.setContents(trans, null);
-					JOptionPane.showMessageDialog(this, "请通过浏览器访问以下网址(已复制到剪贴板):\n" + url, "请注意",
-							JOptionPane.WARNING_MESSAGE);
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (closing) {
+					return;
 				}
-				lbTips.setText("极验验证码验证中...");
-			} catch (Exception e) {
-				e.printStackTrace();
+				statusLabel.setForeground(error ? new Color(170, 45, 45) : new Color(45, 105, 65));
+				statusLabel.setText(message);
 			}
-		}
-		isRefreshingCaptcha = false;
+		});
 	}
 
-	/**
-	 * 登录
-	 */
-	public void login() {
-		lbTips.setText("");
-		String code = jtSMSCode.getText();
-		if (code.isEmpty())
-			lbTips.setText("短信验证码不能为空");
-		else {
-			String tips = inl.loginSMS(countryCode, phoneNumber, code, captchaKey);
-			if (tips == null) {
-				lbTips.setText("登录成功");
-				Global.isLogin = true;
-				WindowEvent event = new WindowEvent(this, WindowEvent.WINDOW_CLOSING);
-				this.dispatchEvent(event);
-			} else {
-				lbTips.setText(tips);
-			}
+	private void cleanup() {
+		if (!cleanupStarted.compareAndSet(false, true)) {
+			return;
 		}
-	}
-
-	/**
-	 * 请求发送短信验证码
-	 */
-	public void sendSMS(String token, String challenge, String validate, String seccode) {
-		lbTips.setText("");
-		try {
-			JSONObject obj = inl.sendSMS(countryCode, phoneNumber, token, challenge, validate, seccode);
-			captchaKey = obj.getJSONObject("data").getString("captcha_key");
-			lbTips.setText("短信验证码已经发送");
-		} catch (Exception e) {
-			lbTips.setText("短信验证码请求发送失败，请重新尝试");
+		closing = true;
+		pendingCaptchaToken = null;
+		captchaKey = null;
+		smsCodeField.setText("");
+		Instance = null;
+		final SocketServer server = socketServer;
+		if (server != null) {
+			Thread shutdownThread = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					server.stopServer();
+				}
+			}, "Thread-SmsLoginServerShutdown");
+			shutdownThread.setDaemon(true);
+			shutdownThread.start();
 		}
 	}
 
 	@Override
-	public void focusGained(FocusEvent e) {
-		if (e.getSource() == jtUserName) {
-			if (Global.userName != null) {
-				jtUserName.setText(Global.userName);
-			} else {
-				jtUserName.setText("");
-			}
-		}
-		JComponent target = (JComponent) e.getSource();
-		target.setBackground(colorGainFocus);
+	public void dispose() {
+		cleanup();
+		super.dispose();
 	}
-
-	@Override
-	public void focusLost(FocusEvent e) {
-		if (e.getSource() == jtUserName) {
-			String content = jtUserName.getText();
-			if (content.isEmpty())
-				jtUserName.setText(tips);
-			else
-				Global.userName = content;
-		}
-		JComponent target = (JComponent) e.getSource();
-		target.setBackground(colorLostFocus);
-	}
-
-	@Override
-	public void mouseClicked(MouseEvent e) {
-		if (e.getSource() == lbGetSMS) {
-			Pattern p = Pattern.compile("^\\+(\\d{1,3}) +(\\d+)$");
-			Matcher m = p.matcher(jtUserName.getText());
-			if (m.find()) {
-				countryCode = m.group(1);
-				phoneNumber = m.group(2);
-				queryCaptcha();
-			} else
-				lbTips.setText("手机号不符合+国际号 手机号码的格式(注意中间的空格)");
-		} else if (e.getSource() == lbLogin) {
-			if (captchaKey == null) {
-				lbTips.setText("请先获取短信验证码!!");
-			} else {
-				login();
-			}
-		} else if (e.getSource() == btnClose) {
-			Logger.println("closing...");
-			WindowEvent event = new WindowEvent(this, WindowEvent.WINDOW_CLOSING);
-			this.dispatchEvent(event);
-		}
-	}
-
-	@Override
-	public void mousePressed(MouseEvent e) {
-		if (e.getSource() == this) {
-			pressedPoint = e.getPoint();
-			// Logger.println(pressedPoint);
-		} else {
-			if (e.getSource() instanceof JLabel) {
-				JLabel label = (JLabel) e.getSource();
-				label.setBorder(BorderFactory.createLineBorder(Color.RED, 2, true));
-			}
-		}
-	}
-
-	@Override
-	public void mouseReleased(MouseEvent e) {
-		if (e.getSource() instanceof JLabel) {
-			JLabel label = (JLabel) e.getSource();
-			label.setBorder(null);
-		}
-		pressedPoint = null;
-	}
-
-	@Override
-	public void mouseEntered(MouseEvent e) {
-	}
-
-	@Override
-	public void mouseExited(MouseEvent e) {
-	}
-
-	@Override
-	public void mouseDragged(MouseEvent e) {
-		// 实现拖拽
-		if (pressedPoint != null && e.getSource() != btnClose) {
-			Point locationPoint = this.getLocation();
-			Point point = e.getPoint();
-			int x = locationPoint.x + point.x - pressedPoint.x;
-			int y = locationPoint.y + point.y - pressedPoint.y;
-			this.setLocation(x, y);
-		}
-	}
-
-	@Override
-	public void mouseMoved(MouseEvent e) {
-	}
-
 }

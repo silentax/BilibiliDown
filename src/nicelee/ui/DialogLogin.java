@@ -2,381 +2,393 @@ package nicelee.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Desktop;
-import java.awt.Font;
-import java.awt.Image;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.awt.event.MouseMotionListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.ActionListener;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
-import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
-import nicelee.ui.item.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
-import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.border.EmptyBorder;
 
 import org.json.JSONObject;
 
-import javax.swing.JDialog;
-
 import nicelee.bilibili.INeedLogin;
-import nicelee.bilibili.util.Logger;
 import nicelee.server.core.SocketServer;
+import nicelee.ui.item.JOptionPane;
+import nicelee.ui.item.MJButton;
+import nicelee.ui.util.SwingDispatch;
 
-public class DialogLogin extends JDialog implements FocusListener, MouseListener, MouseMotionListener {
+/**
+ * 密码登录窗口。网络请求在后台执行，Swing 状态只在 EDT 更新。
+ */
+public class DialogLogin extends JDialog {
 
-	public static DialogLogin Instance;
-	/**
-	 * 
-	 */
 	private static final long serialVersionUID = 3741671572332334943L;
+	private static final String USER_PLACEHOLDER = "请输入手机号或邮箱";
 
-	public static void main(String[] args) {
-		try {
-//			System.setProperty("proxyHost", "127.0.0.1");
-//			System.setProperty("proxyPort", "8888");
-			DialogLogin dialog = new DialogLogin(new INeedLogin());
-			dialog.init();
-			Logger.println("-----------------");
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+	public static volatile DialogLogin Instance;
 
-	final static String tips = "请输入手机号/邮箱";
-	final static Color colorLostFocus = Color.getHSBColor(100, 100, 100);
-	final static Color colorGainFocus = Color.white;
+	private final INeedLogin inl;
+	private final JTextField userNameField = new JTextField();
+	private final JPasswordField passwordField = new JPasswordField();
+	private final JButton loginButton = new MJButton("获取验证码并登录");
+	private final JLabel statusLabel = new JLabel(" ", SwingConstants.CENTER);
+	private final Object credentialLock = new Object();
+	private final AtomicLong captchaRequestSequence = new AtomicLong();
+	private final AtomicBoolean cleanupStarted = new AtomicBoolean();
 
-	private Point pressedPoint;// 记录鼠标按下时的位置
-	private JButton btnClose;
-
-	INeedLogin inl;
-	JTextField jtUserName = new JTextField(tips);
-	JPasswordField jtPassword = new JPasswordField("123456");
-	JLabel lbLogin = new JLabel("点击过极验验证码");
-	JLabel lbTips = new JLabel("");
-	boolean isRefreshingCaptcha = false;
-	boolean isLogging = false;
-
-	SocketServer socketServer;
+	private volatile boolean refreshingCaptcha;
+	private volatile boolean loggingIn;
+	private volatile boolean closing;
+	private volatile SocketServer socketServer;
+	private char[] pendingPassword;
+	private String pendingCaptchaToken;
+	private long pendingRequestId;
 
 	public DialogLogin(INeedLogin inl) {
 		this.inl = inl;
 	}
 
-	public void init() {
-		new Thread(new Runnable() {
+	public static void main(String[] args) {
+		SwingUtilities.invokeLater(new Runnable() {
 			@Override
 			public void run() {
-				socketServer = new SocketServer(Global.serverPort);
-				socketServer.startServer();
+				new DialogLogin(new INeedLogin()).init();
 			}
-		}, "密码登录server").start();
+		});
+	}
+
+	public void init() {
 		Instance = this;
+		startCallbackServer();
+		setTitle("BilibiliDown - 密码登录");
+		setModal(true);
 		setAlwaysOnTop(true);
-		setResizable(false);
-		setSize(522, 300);
-		setUndecorated(true);
-		this.setLocationRelativeTo(null);
-		// setBounds(400, 100, DIALOG_WIDTH,DIALOG_HEIGHT);
-		getContentPane().setLayout(new BorderLayout());
-
-		JPanel panel = new JPanel();
-		// panel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		panel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1, true));
-		panel.setBackground(Color.WHITE);
-
-		initSysButton(panel);
-		ImageIcon icon = new ImageIcon(DialogLogin.class.getResource("/resources/banner.jpg"));
-		icon = new ImageIcon(icon.getImage().getScaledInstance(520, 110, Image.SCALE_SMOOTH));
-		JLabel label = new JLabel(icon);
-		label.setIcon(icon);
-		label.setBounds(1, 1, 520, 90);
-		panel.add(label);
-
-		Font font = new Font(Font.SERIF, Font.PLAIN, 18); //"system"
-		Insets insets = new Insets(2, 10, 2, 0);
-		jtUserName.setBounds(50, 80, 420, 40);
-		jtPassword.setBounds(50, 130, 420, 40);
-		jtUserName.setBackground(colorLostFocus);
-		jtPassword.setBackground(colorLostFocus);
-		jtUserName.setMargin(insets);
-		jtPassword.setMargin(insets);
-		jtUserName.setFont(font);
-		jtPassword.setFont(font);
-
-		lbLogin.setBounds(50, 200, 420, 40);
-		lbLogin.setHorizontalAlignment(SwingConstants.CENTER);
-		lbLogin.setBackground(Color.LIGHT_GRAY);
-		// lbLogin.setForeground(Color.BLUE);
-		lbLogin.setOpaque(true);
-		lbLogin.setFont(font);
-		// lbLogin.setBorder(BorderFactory.createLineBorder(Color.red));
-
-		lbTips.setBounds(50, 250, 420, 40);
-		lbTips.setHorizontalAlignment(SwingConstants.CENTER);
-		lbTips.setForeground(Color.RED);
-		// lbTips.setFont(font);
-		panel.add(jtUserName);
-		panel.add(jtPassword);
-		panel.add(lbLogin);
-		panel.add(lbTips);
-		for(Component com: panel.getComponents()) {
-			bindKeyEnterEvent((JComponent)com);
+		setResizable(true);
+		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+		setContentPane(createContentPanel());
+		getRootPane().setDefaultButton(loginButton);
+		pack();
+		setMinimumSize(new Dimension(480, 330));
+		setLocationRelativeTo(null);
+		if (Global.userName != null && !Global.userName.trim().isEmpty()) {
+			userNameField.setText(Global.userName);
 		}
-
-		jtUserName.addFocusListener(this);
-		jtPassword.addFocusListener(this);
-		lbLogin.addMouseListener(this);
-		getContentPane().add(panel, BorderLayout.CENTER);
-		panel.setLayout(null);
-
-		// 根据参数初始化
-		if (Global.userName != null) {
-			jtUserName.setText(Global.userName);
-		}
-		if (Global.password != null) {
-			jtPassword.setText(Global.password);
-		}
-		this.addWindowListener(new java.awt.event.WindowAdapter() {
-			public void windowOpened(java.awt.event.WindowEvent evt) {
-				lbLogin.requestFocus();
-			}
-		});
-
-		this.addMouseMotionListener(this);
-		this.addMouseListener(this);
-		this.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-		this.addWindowListener(new WindowAdapter() {
-			public void windowClosing(WindowEvent e) {
-				super.windowClosing(e);
-				new Thread(new Runnable() {
-					@Override
-					public void run() {
-						Logger.println("socketServer 关闭中...");
-						try {
-							Thread.sleep(2000);
-						} catch (InterruptedException e) {
-						}
-						if (socketServer != null)
-							socketServer.stopServer();
-					}
-				}, "Thread to shutdown server").start();
-			}
-		});
-
-		this.setModal(true);
-		this.setVisible(true);
+		passwordField.setText("");
+		setVisible(true);
 	}
 
-	/**
-	 * 初始化关闭按钮
-	 */
-	private void initSysButton(JPanel panel) {
-		// 添加关闭按钮
-		btnClose = new JButton();
-		btnClose.setRolloverIcon(new ImageIcon(this.getClass().getResource("/resources/xh.jpg")));
-		btnClose.setFocusPainted(false);
-		btnClose.setBorderPainted(false);
-		btnClose.setContentAreaFilled(false);
-		btnClose.setOpaque(true);
-		ImageIcon imgx = new ImageIcon(this.getClass().getResource("/resources/x.jpg"));
-		btnClose.setIcon(imgx);
-		btnClose.setBounds(490, 5, 20, 20);
-		panel.add(btnClose);
-		// 实现功能 - 最大化
-		btnClose.addMouseListener(this);
+	private JPanel createContentPanel() {
+		JPanel root = new JPanel(new BorderLayout(0, 16));
+		root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(205, 210, 216)),
+				new EmptyBorder(16, 24, 20, 24)));
+		root.setBackground(Color.WHITE);
+
+		ImageIcon banner = new ImageIcon(DialogLogin.class.getResource("/resources/banner.jpg"));
+		root.add(new JLabel(banner, SwingConstants.CENTER), BorderLayout.NORTH);
+
+		JPanel form = new JPanel(new GridBagLayout());
+		form.setOpaque(false);
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.insets = new Insets(5, 5, 5, 5);
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+
+		constraints.gridx = 0;
+		constraints.gridy = 0;
+		constraints.weightx = 0.0;
+		form.add(new JLabel("账号"), constraints);
+		constraints.gridx = 1;
+		constraints.weightx = 1.0;
+		userNameField.setToolTipText(USER_PLACEHOLDER);
+		form.add(userNameField, constraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 1;
+		constraints.weightx = 0.0;
+		form.add(new JLabel("密码"), constraints);
+		constraints.gridx = 1;
+		constraints.weightx = 1.0;
+		passwordField.setToolTipText("密码仅在本次验证码登录期间保留，不写入配置文件");
+		form.add(passwordField, constraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 2;
+		constraints.gridwidth = 2;
+		constraints.weightx = 1.0;
+		loginButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				queryCaptchaInBackground();
+			}
+		});
+		form.add(loginButton, constraints);
+
+		constraints.gridy = 3;
+		statusLabel.setForeground(new Color(80, 80, 80));
+		form.add(statusLabel, constraints);
+		root.add(form, BorderLayout.CENTER);
+		return root;
 	}
 
-	/**
-	 * 刷新验证码
-	 */
-	private void queryCaptcha() {
-		Logger.println("刷新验证码");
-		isRefreshingCaptcha = true;
-		lbTips.setText("");
-		if (jtUserName.hasFocus()) {
-			Global.userName = jtUserName.getText();
-		} else if (jtPassword.hasFocus()) {
-			Global.password = String.valueOf(jtPassword.getPassword());
-		}
-		if (Global.userName == null || Global.password == null || Global.userName.isEmpty()
-				|| Global.password.isEmpty()) {
-			lbTips.setText("输入不能为空！");
-		} else {
-			try {
-				JSONObject geetest = inl.getGeetest();
-				String token = geetest.getString("token");
-				String gt = geetest.getJSONObject("geetest").getString("gt");
-				String challenge = geetest.getJSONObject("geetest").getString("challenge");
-				String url = String.format("http://localhost:%d/static/index.html?token=%s&gt=%s&challenge=%s", Global.serverPort,
-						token, gt, challenge);
-				final boolean browseSupported = Desktop.getDesktop().isSupported(Desktop.Action.BROWSE);
-				if(browseSupported)
-					Desktop.getDesktop().browse(new URI(url));
-				else {
-					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-					Transferable trans = new StringSelection(url);
-					clipboard.setContents(trans, null);
-					JOptionPane.showMessageDialog(this, "请通过浏览器访问以下网址(已复制到剪贴板):\n" + url, "请注意", JOptionPane.WARNING_MESSAGE);
+	private void startCallbackServer() {
+		Thread serverThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				SocketServer server = new SocketServer(Global.serverPort);
+				socketServer = server;
+				if (!closing) {
+					server.startServer();
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
+			}
+		}, "Thread-PasswordLoginServer");
+		serverThread.setDaemon(true);
+		serverThread.start();
+	}
+
+	private void queryCaptchaInBackground() {
+		if (refreshingCaptcha || loggingIn) {
+			return;
+		}
+		String userName = userNameField.getText() == null ? "" : userNameField.getText().trim();
+		char[] password = passwordField.getPassword();
+		if (userName.isEmpty() || password.length == 0) {
+			Arrays.fill(password, '\0');
+			showStatus("账号和密码不能为空", true);
+			return;
+		}
+
+		Global.userName = userName;
+		passwordField.setText("");
+		final long requestId = captchaRequestSequence.incrementAndGet();
+		replacePendingPassword(requestId, password);
+		refreshingCaptcha = true;
+		setControlsBusy(true, "正在获取验证码...");
+
+		Thread captchaThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					JSONObject geetest = inl.getGeetest();
+					String token = geetest.getString("token");
+					String gt = geetest.getJSONObject("geetest").getString("gt");
+					String challenge = geetest.getJSONObject("geetest").getString("challenge");
+					if (!markCaptchaReady(requestId, token)) {
+						return;
+					}
+					if (closing) {
+						clearPendingPassword(requestId);
+						return;
+					}
+					String url = String.format("http://localhost:%d/static/index.html?token=%s&gt=%s&challenge=%s",
+							Global.serverPort, token, gt, challenge);
+					openCaptchaUrl(url);
+					showStatus("请在浏览器完成验证码", false);
+				} catch (Exception error) {
+					clearPendingPassword(requestId);
+					showStatus("验证码获取失败，请检查网络或端口占用", true);
+				} finally {
+					refreshingCaptcha = false;
+					setControlsBusy(false, null);
+				}
+			}
+		}, "Thread-PasswordCaptcha");
+		captchaThread.setDaemon(true);
+		captchaThread.start();
+	}
+
+	private void openCaptchaUrl(final String url) throws Exception {
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+			Desktop.getDesktop().browse(new URI(url));
+			return;
+		}
+		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+		clipboard.setContents(new StringSelection(url), null);
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				JOptionPane.showMessageDialog(DialogLogin.this,
+						"当前系统无法自动打开浏览器。验证码地址已复制到剪贴板。", "请注意",
+						JOptionPane.WARNING_MESSAGE);
+			}
+		});
+	}
+
+	/** 由本地验证码回调线程调用。 */
+	public synchronized String login(String token, String challenge, String validate, String seccode) {
+		if (loggingIn) {
+			return "登录请求正在处理中";
+		}
+		char[] password = takePendingPassword(token);
+		if (password == null) {
+			showStatus("验证码已失效，请重新输入密码并获取验证码", true);
+			return "验证码已失效，请重新获取";
+		}
+
+		loggingIn = true;
+		setControlsBusy(true, "正在登录...");
+		String passwordText = new String(password);
+		String result;
+		try {
+			result = inl.login(Global.userName, passwordText, token, challenge, validate, seccode);
+			if (closing) {
+				result = "登录窗口已关闭";
+			}
+		} catch (RuntimeException error) {
+			result = "登录失败，请检查网络后重试";
+		} finally {
+			Arrays.fill(password, '\0');
+			passwordText = null;
+			loggingIn = false;
+		}
+		final String loginResult = result;
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				if (closing) {
+					return;
+				}
+				if (loginResult == null) {
+					showStatus("登录成功", false);
+					Global.isLogin = true;
+					dispose();
+				} else {
+					showStatus(loginResult, true);
+					setControlsBusy(false, null);
+				}
+			}
+		});
+		return result;
+	}
+
+	private void setControlsBusy(final boolean busy, final String status) {
+		if (closing) {
+			return;
+		}
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (closing) {
+					return;
+				}
+				loginButton.setEnabled(!busy);
+				userNameField.setEnabled(!busy);
+				passwordField.setEnabled(!busy);
+				if (status != null) {
+					showStatus(status, false);
+				}
+			}
+		});
+	}
+
+	private void showStatus(final String message, final boolean error) {
+		if (closing) {
+			return;
+		}
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (closing) {
+					return;
+				}
+				statusLabel.setForeground(error ? new Color(170, 45, 45) : new Color(45, 105, 65));
+				statusLabel.setText(message);
+			}
+		});
+	}
+
+	private void replacePendingPassword(long requestId, char[] password) {
+		synchronized (credentialLock) {
+			clearPendingPasswordLocked();
+			pendingRequestId = requestId;
+			pendingPassword = password;
+			pendingCaptchaToken = null;
+		}
+	}
+
+	private boolean markCaptchaReady(long requestId, String token) {
+		synchronized (credentialLock) {
+			if (closing || pendingPassword == null || pendingRequestId != requestId) {
+				return false;
+			}
+			pendingCaptchaToken = token;
+			return true;
+		}
+	}
+
+	private char[] takePendingPassword(String token) {
+		synchronized (credentialLock) {
+			if (pendingPassword == null || pendingCaptchaToken == null || !pendingCaptchaToken.equals(token)) {
+				return null;
+			}
+			char[] password = pendingPassword;
+			pendingPassword = null;
+			pendingCaptchaToken = null;
+			return password;
+		}
+	}
+
+	private void clearPendingPassword(long requestId) {
+		synchronized (credentialLock) {
+			if (pendingRequestId == requestId) {
+				clearPendingPasswordLocked();
 			}
 		}
-		isRefreshingCaptcha = false;
 	}
 
-	/**
-	 * 登录
-	 */
-	public String login(String token, String challenge, String validate, String seccode) {
-		lbTips.setText("");
-		isLogging = true;
-		String tips = inl.login(Global.userName, Global.password, token, challenge, validate, seccode);
-		if (tips == null) {
-			lbTips.setText("登录成功");
-			Global.isLogin = true;
-			WindowEvent event = new WindowEvent(this, WindowEvent.WINDOW_CLOSING);
-			this.dispatchEvent(event);
-		} else {
-			lbTips.setText(tips);
+	private void clearPendingPasswordLocked() {
+		if (pendingPassword != null) {
+			Arrays.fill(pendingPassword, '\0');
 		}
-		isLogging = false;
-		return tips;
+		pendingPassword = null;
+		pendingCaptchaToken = null;
 	}
 
-	@Override
-	public void focusGained(FocusEvent e) {
-		if (e.getSource() == jtUserName) {
-			if (Global.userName != null) {
-				jtUserName.setText(Global.userName);
-			} else {
-				jtUserName.setText("");
-			}
-		} else if (e.getSource() == jtPassword) {
-			if (Global.password != null) {
-				jtPassword.setText(Global.password);
-			} else {
-				jtPassword.setText("");
-			}
+	private void cleanup() {
+		if (!cleanupStarted.compareAndSet(false, true)) {
+			return;
 		}
-		JComponent target = (JComponent) e.getSource();
-		target.setBackground(colorGainFocus);
-	}
-
-	@Override
-	public void focusLost(FocusEvent e) {
-		if (e.getSource() == jtUserName) {
-			String content = jtUserName.getText();
-			if (content.isEmpty())
-				jtUserName.setText(tips);
-			else
-				Global.userName = content;
-		} else if (e.getSource() == jtPassword) {
-			String content = String.valueOf(jtPassword.getPassword());
-			if (content.isEmpty())
-				jtPassword.setText("123456");
-			else
-				Global.password = content;
+		closing = true;
+		captchaRequestSequence.incrementAndGet();
+		synchronized (credentialLock) {
+			clearPendingPasswordLocked();
 		}
-		JComponent target = (JComponent) e.getSource();
-		target.setBackground(colorLostFocus);
-	}
-
-	@Override
-	public void mouseClicked(MouseEvent e) {
-		if (e.getSource() == lbLogin) {
-			if (!isLogging) {
-				// login();
-				queryCaptcha();
-			}
-		} else if (e.getSource() == btnClose) {
-			Logger.println("closing...");
-			WindowEvent event = new WindowEvent(this, WindowEvent.WINDOW_CLOSING);
-			this.dispatchEvent(event);
+		passwordField.setText("");
+		Instance = null;
+		final SocketServer server = socketServer;
+		if (server != null) {
+			Thread shutdownThread = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					server.stopServer();
+				}
+			}, "Thread-PasswordLoginServerShutdown");
+			shutdownThread.setDaemon(true);
+			shutdownThread.start();
 		}
 	}
 
 	@Override
-	public void mousePressed(MouseEvent e) {
-		if (e.getSource() == this) {
-			pressedPoint = e.getPoint();
-			// Logger.println(pressedPoint);
-		} else {
-			if (e.getSource() instanceof JLabel) {
-				JLabel label = (JLabel) e.getSource();
-				label.setBorder(BorderFactory.createLineBorder(Color.RED, 2, true));
-			}
-		}
-	}
-
-	@Override
-	public void mouseReleased(MouseEvent e) {
-		if (e.getSource() instanceof JLabel) {
-			JLabel label = (JLabel) e.getSource();
-			label.setBorder(null);
-		}
-		pressedPoint = null;
-	}
-
-	@Override
-	public void mouseEntered(MouseEvent e) {
-	}
-
-	@Override
-	public void mouseExited(MouseEvent e) {
-	}
-
-	@Override
-	public void mouseDragged(MouseEvent e) {
-		// 实现拖拽
-		if (pressedPoint != null && e.getSource() != btnClose) {
-			Point locationPoint = this.getLocation();
-			Point point = e.getPoint();
-			int x = locationPoint.x + point.x - pressedPoint.x;
-			int y = locationPoint.y + point.y - pressedPoint.y;
-			this.setLocation(x, y);
-		}
-	}
-
-	@Override
-	public void mouseMoved(MouseEvent e) {
-	}
-
-	void bindKeyEnterEvent(JComponent com) {
-		com.getInputMap().put(KeyStroke.getKeyStroke('\n'), "login");
-		com.getActionMap().put("login", new LoginAction());
-	}
-
-	class LoginAction extends AbstractAction {
-		private static final long serialVersionUID = 6932343950986413925L;
-
-		@Override
-		public void actionPerformed(ActionEvent e) {
-			if (!isLogging) {
-				queryCaptcha();
-			}
-		}
+	public void dispose() {
+		cleanup();
+		super.dispose();
 	}
 }
