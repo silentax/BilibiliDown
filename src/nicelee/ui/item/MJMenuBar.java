@@ -39,6 +39,7 @@ import nicelee.ui.thread.BatchDownloadRbyRThread;
 import nicelee.ui.thread.BatchDownloadThread;
 import nicelee.ui.thread.CookieRefreshThread;
 import nicelee.ui.thread.DownloadRunnable;
+import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.LoginThread;
 
 public class MJMenuBar extends JMenuBar {
@@ -443,7 +444,7 @@ public class MJMenuBar extends JMenuBar {
 						Logger.println(c.toString());
 						Logger.println(qn);
 						DownloadRunnable downThread = new DownloadRunnable(null, c, qn);
-						Global.queryThreadPool.execute(downThread);
+						DownloadTaskDispatcher.submit(downThread);
 					}
 				} catch (NullPointerException e0) {
 				} catch (Exception e1) {

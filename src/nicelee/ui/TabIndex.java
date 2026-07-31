@@ -20,13 +20,11 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import nicelee.ui.item.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
-import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.enums.DownloadModeEnum;
 import nicelee.bilibili.model.FavList;
 import nicelee.bilibili.util.Logger;
@@ -35,6 +33,7 @@ import nicelee.ui.item.MJTabVideo;
 import nicelee.ui.item.MJTextField;
 import nicelee.ui.thread.GetVideoDetailThread;
 import nicelee.ui.thread.LoginThread;
+import nicelee.ui.util.SwingDispatch;
 
 public class TabIndex extends JPanel implements ActionListener, MouseListener, ItemListener {
 
@@ -52,6 +51,8 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	//new MJTextField("https://www.bilibili.com/video/av35296336");
 	JButton btnSearch = new MJButton("查找");
 	JButton btnSearchNextPage = new MJButton("下一页");
+	JLabel lbSearchStatus = new JLabel("就绪");
+	private boolean searchInProgress;
 	
 	JTextArea consoleArea = new JTextArea(20, 50);
 	JTabbedPane jTabbedpane;
@@ -116,6 +117,9 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 		jpSearch.add(btnSearch);
 		jpSearch.add(btnSearchNextPage);
 		jpSearch.add(cmbFavList);
+		lbSearchStatus.setPreferredSize(new Dimension(1000, 24));
+		lbSearchStatus.setForeground(new Color(60, 60, 60));
+		jpSearch.add(lbSearchStatus);
 		jpSearch.setOpaque(false);
 		this.add(jpSearch);
 		this.setOpaque(false);
@@ -212,42 +216,64 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	 * 根据输入查找 av信息，并弹出av信息的Tab页
 	 */
 	public void search() {
-		String avId = txtSearch.getText();
-		if(!placeHolder.equals(avId)) {
-			INeedAV iNeedAV = new INeedAV();
-			avId = iNeedAV.getValidID(avId);
-			Logger.println("当前解析的id为：" + avId);
-//			if(avId.contains(" ")) {
-//				String avs[] = avId.trim().split(" ");
-//				System.out.println("将弹出窗口个数： " + avs.length);
-//				for(String av : avs) {
-//					popVideoInfoTab(av);
-//				}
-//			}else {
-//				popVideoInfoTab(avId);
-//			}
-			popVideoInfoTab(avId);
+		if (searchInProgress) {
+			lbSearchStatus.setText("已有解析任务正在进行，请稍候...");
+			return;
 		}
-		
+		String searchContent = txtSearch.getText();
+		if (searchContent == null || searchContent.trim().isEmpty() || placeHolder.equals(searchContent)) {
+			lbSearchStatus.setText("请输入 B 站作品编号或链接");
+			return;
+		}
+		setSearchBusy(true, "正在解析：" + compact(searchContent));
+		popVideoInfoTab(searchContent.trim());
 	}
 
 	/**
 	 * 弹出avId对应的Video 标签页
 	 * @param avId
 	 */
-	private void popVideoInfoTab(String avId) {
-		if("".equals(avId)) {
-			JOptionPane.showMessageDialog(this, "解析链接失败!", "失败", JOptionPane.WARNING_MESSAGE);
-			return;
-		}
+	private void popVideoInfoTab(String searchContent) {
 		// 作品页
 		JLabel label = new JLabel("正在加载中...");
 //		final TabVideo tab = new TabVideo(label);
-		final TabVideo tab = new MJTabVideo(jTabbedpane, label, avId);
+		final TabVideo tab = new MJTabVideo(jTabbedpane, label, searchContent);
+		tab.setLoading(true);
 		jTabbedpane.addTab("作品页", tab);
 		jTabbedpane.setTabComponentAt(jTabbedpane.indexOfComponent(tab), label);
-		GetVideoDetailThread th = new GetVideoDetailThread(tab, avId);
+		jTabbedpane.setSelectedComponent(tab);
+		GetVideoDetailThread th = new GetVideoDetailThread(tab, searchContent, new GetVideoDetailThread.Listener() {
+			@Override
+			public void onFinished(boolean success, String message) {
+				setSearchBusy(false, message);
+			}
+		});
 		th.start();
+	}
+
+	private void setSearchBusy(boolean busy, String status) {
+		searchInProgress = busy;
+		btnSearch.setEnabled(!busy);
+		btnSearchNextPage.setEnabled(!busy);
+		cmbFavList.setEnabled(!busy);
+		lbSearchStatus.setText(status);
+		lbSearchStatus.setForeground(busy ? new Color(25, 90, 160) : new Color(60, 60, 60));
+	}
+
+	private String compact(String value) {
+		String text = value.trim().replace('\n', ' ').replace('\r', ' ');
+		return text.length() > 60 ? text.substring(0, 57) + "..." : text;
+	}
+
+	public void showStartupStatus(final String status) {
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (!searchInProgress) {
+					lbSearchStatus.setText(status);
+				}
+			}
+		});
 	}
 
 	@Override

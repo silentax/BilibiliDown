@@ -17,12 +17,14 @@ import javax.swing.JPanel;
 
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.downloaders.Downloader;
+import nicelee.bilibili.downloaders.IDownloader;
 import nicelee.bilibili.enums.StatusEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.util.Logger;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
 import nicelee.ui.TabDownload;
+import nicelee.ui.util.SwingDispatch;
 
 public class DownloadInfoPanel extends JPanel implements ActionListener {
 
@@ -37,12 +39,12 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 	int realqn;
 
 	// 下载相关
-	public INeedAV iNeedAV;
+	public volatile INeedAV iNeedAV;
 	public String url;
 	public String avid_qn;
-	public String formattedTitle;
-	public boolean stopOnQueue = false;
-	int failCnt = 0;
+	public volatile String formattedTitle;
+	public volatile boolean stopOnQueue = false;
+	volatile int failCnt = 0;
 
 	public int getFailCnt() {
 		return failCnt;
@@ -52,8 +54,8 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		this.failCnt = failCnt;
 	}
 
-	long lastCntTime = 0L;
-	long lastCnt = 0L;
+	volatile long lastCntTime = 0L;
+	volatile long lastCnt = 0L;
 	/**
 	 * 
 	 */
@@ -145,17 +147,17 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 
 		lbavName = new JLabel(avTitle);
 		lbavName.setToolTipText(avTitle);
-		lbavName.setPreferredSize(new Dimension(500, 45));
+		lbavName.setPreferredSize(new Dimension(400, 45));
 		lbavName.setBorder(BorderFactory.createLineBorder(Color.red));
 		this.add(lbavName);
 
-		lbCurrentStatus = new JLabel("正在下载...");
-		lbCurrentStatus.setPreferredSize(new Dimension(200, 45));
+		lbCurrentStatus = new JLabel("正在获取下载地址...");
+		lbCurrentStatus.setPreferredSize(new Dimension(350, 45));
 		lbCurrentStatus.setBorder(BorderFactory.createLineBorder(Color.red));
 		this.add(lbCurrentStatus);
 
-		lbDownFile = new JLabel(currentDown + "/" + totalSize);
-		lbDownFile.setPreferredSize(new Dimension(200, 45));
+		lbDownFile = new JLabel("准备中...");
+		lbDownFile.setPreferredSize(new Dimension(230, 45));
 		lbDownFile.setBorder(BorderFactory.createLineBorder(Color.red));
 		this.add(lbDownFile);
 		this.setBackground(new Color(204, 255, 255));
@@ -163,37 +165,17 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		btnControl = new MJButton("暂停");
 		btnControl.setPreferredSize(new Dimension(100, 45));
 		btnControl.addActionListener(this);
+		btnControl.setVisible(false);
 		this.add(btnControl);
+		setPreparing(true);
 	}
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == btnOpenFolder) {
-			File file = new File(lbFileName.getText());
-			String os = System.getProperty("os.name");
-			try {
-				if (file.exists() && os.toLowerCase().startsWith("win")) {
-					// 打开并选中
-					String cmd[] = { "explorer", "/e,/select,", file.getAbsolutePath() };
-					Runtime.getRuntime().exec(cmd);
-				} else if(file.exists()){
-					Desktop desktop = Desktop.getDesktop();
-					desktop.open(file.getParentFile());
-				} else {
-					Desktop desktop = Desktop.getDesktop();
-					desktop.open(file.getParentFile());
-				}
-			} catch (Exception e1) {
-				JOptionPane.showMessageDialog(null, "打开文件夹失败!", "失败", JOptionPane.INFORMATION_MESSAGE);
-			}
+			openPathInBackground(new File(lbFileName.getText()), true);
 		} else if (e.getSource() == btnOpen) {
-			File file = new File(lbFileName.getText());
-			try {
-				Desktop.getDesktop().open(file);
-			} catch (Exception e1) {
-				// e1.printStackTrace();
-				JOptionPane.showMessageDialog(null, "打开文件失败!", "失败", JOptionPane.INFORMATION_MESSAGE);
-			}
+			openPathInBackground(new File(lbFileName.getText()), false);
 		} else if (e.getSource() == btnRemove) {
 //			if(Global.downloadTaskList.get(this).getStatus() == 0) {
 //				JOptionPane.showMessageDialog(this, "当前正在文件下载中!", "警告", JOptionPane.WARNING_MESSAGE);
@@ -214,13 +196,36 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 				Logger.println("停止任务中，请误操作");
 				return;
 			}
-			StatusEnum status = iNeedAV.getDownloader().currentStatus();
-			if (status == StatusEnum.DOWNLOADING) {
-				stopTask();
-			} else {
-				setFailCnt(0);
-				continueTask();
+			if (iNeedAV == null) {
+				return;
 			}
+			btnControl.setEnabled(false);
+			Thread controlThread = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						StatusEnum status = iNeedAV.getDownloader().currentStatus();
+						if (status == StatusEnum.DOWNLOADING) {
+							stopTask();
+						} else {
+							setFailCnt(0);
+							continueTask();
+						}
+					} catch (RuntimeException error) {
+						JOptionPaneManager.alertErrMsgWithNewThread("任务操作失败",
+								error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+					} finally {
+						SwingDispatch.runLater(new Runnable() {
+							@Override
+							public void run() {
+								btnControl.setEnabled(true);
+							}
+						});
+					}
+				}
+			}, "Thread-ControlDownload");
+			controlThread.setDaemon(true);
+			controlThread.start();
 		}
 	}
 
@@ -236,12 +241,60 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		this.lbavName.setText(formattedTitle);
 		this.lbavName.setToolTipText(formattedTitle);
 		this.stopOnQueue = false;
+		this.lbCurrentStatus.setText("下载地址已就绪，等待调度...");
+		this.lbDownFile.setText("等待下载中...");
+	}
+
+	public void markSubmitted() {
+		setPreparing(false);
+	}
+
+	public void setPreparing(boolean preparing) {
+		btnOpen.setEnabled(!preparing);
+		btnOpenFolder.setEnabled(!preparing);
+		btnRemove.setEnabled(!preparing);
+		if (preparing) {
+			btnControl.setVisible(false);
+			lbCurrentStatus.setText("正在获取下载地址...");
+			lbDownFile.setText("准备中...");
+		}
+	}
+
+	private void openPathInBackground(final File file, final boolean openFolder) {
+		Thread openThread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					if (openFolder && System.getProperty("os.name").toLowerCase().startsWith("win") && file.exists()) {
+						String[] command = { "explorer", "/e,/select,", file.getAbsolutePath() };
+						Runtime.getRuntime().exec(command);
+						return;
+					}
+					if (!Desktop.isDesktopSupported()) {
+						throw new IllegalStateException("当前系统不支持 Desktop 打开操作");
+					}
+					File target = openFolder ? file.getParentFile() : file;
+					if (target == null || !target.exists()) {
+						throw new IllegalStateException("目标路径不存在");
+					}
+					Desktop.getDesktop().open(target);
+				} catch (Exception error) {
+					JOptionPaneManager.alertErrMsgWithNewThread(openFolder ? "打开文件夹失败" : "打开文件失败",
+							error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+				}
+			}
+		}, openFolder ? "Thread-OpenDownloadFolder" : "Thread-OpenDownloadFile");
+		openThread.setDaemon(true);
+		openThread.start();
 	}
 
 	/**
 	 * 停止任务(方法内包含状态判断)
 	 */
 	public void stopTask() {
+		if (iNeedAV == null) {
+			return;
+		}
 		Downloader downloader = iNeedAV.getDownloader();
 		downloader.stopTask();
 		stopOnQueue = true;
@@ -251,6 +304,9 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 	 * 继续任务(方法内包含状态判断)
 	 */
 	public void continueTask() {
+		if (iNeedAV == null) {
+			return;
+		}
 		stopOnQueue = false;
 		Downloader downloader = iNeedAV.getDownloader();
 		// 如果正在下载 或 下载完毕，则不需要下载
@@ -268,26 +324,33 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 	 * 删除任务
 	 */
 	public void removeTask(boolean deleteAll) {
+		if (iNeedAV == null) {
+			return;
+		}
+		final IDownloader downloader = Global.downloadTaskList.get(this);
+		if (downloader == null) {
+			return;
+		}
 		// 删除所有 或 删除已完成的任务
 		// 0 正在下载; 1 下载完毕; -1 出现错误; -2 人工停止;-3队列中
-		if (deleteAll || iNeedAV.getDownloader().currentStatus() == StatusEnum.SUCCESS) {
+		if (deleteAll || downloader.currentStatus() == StatusEnum.SUCCESS) {
 			this.stopOnQueue = true;
-			// 停止下载
-			Global.downloadTaskList.get(this).stopTask();
 			// 全局监控撤销
-			Global.downloadTaskList.remove(this);
+			Global.downloadTaskList.remove(this, downloader);
 			// 当前页面控件删除
-			Global.downloadTab.getJpContent().remove(this);
-			// 大小重新适配
-			Global.downloadTab.getJpContent()
-					.setPreferredSize(new Dimension(1100, 128 * Global.downloadTaskList.size()));
-			Global.downloadTab.getJpContent().updateUI();
-			Global.downloadTab.getJpContent().repaint();
-			// 删除未完成的下载文件
-			File file = new File(lbFileName.getText() + ".part");
-			if (file.exists()) {
-				file.delete();
-			}
+			Global.downloadTab.removeTaskPanel(this);
+			final File partialFile = new File(lbFileName.getText() + ".part");
+			Thread cleanupThread = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					downloader.stopTask();
+					if (partialFile.exists() && !partialFile.delete()) {
+						Logger.println("未能删除下载任务的临时文件");
+					}
+				}
+			}, "Thread-RemoveDownloadTask");
+			cleanupThread.setDaemon(true);
+			cleanupThread.start();
 		}
 	}
 

@@ -43,11 +43,22 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+
+    uiExperienceTest {
+        java {
+            srcDirs = ['src']
+            include 'nicelee/test/ui/**'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 configurations {
     securityTestImplementation.extendsFrom implementation
     securityTestRuntimeOnly.extendsFrom runtimeOnly
+    uiExperienceTestImplementation.extendsFrom implementation
+    uiExperienceTestRuntimeOnly.extendsFrom runtimeOnly
 }
 
 dependencies {
@@ -112,10 +123,19 @@ tasks.register('sourcePluginSecurityTest', JavaExec) {
     mainClass = 'nicelee.test.security.SourcePluginSecurityTest'
 }
 
+tasks.register('uiExperienceTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies EDT dispatching and download progress formatting.'
+    dependsOn tasks.named('uiExperienceTestClasses')
+    classpath = sourceSets.uiExperienceTest.runtimeClasspath
+    mainClass = 'nicelee.test.ui.UiExperienceTest'
+    jvmArgs '-Djava.awt.headless=true'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
             tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
-            tasks.named('sourcePluginSecurityTest')
+            tasks.named('sourcePluginSecurityTest'), tasks.named('uiExperienceTest')
 }
 
 tasks.named('jar') {

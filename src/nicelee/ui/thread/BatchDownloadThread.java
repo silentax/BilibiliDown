@@ -16,6 +16,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.Callable;
 
 import nicelee.ui.item.JOptionPane;
 
@@ -30,6 +31,7 @@ import nicelee.bilibili.util.batchdownload.BatchDownload;
 import nicelee.bilibili.util.batchdownload.BatchDownload.BatchDownloadsBuilder;
 import nicelee.ui.Global;
 import nicelee.ui.item.JOptionPaneManager;
+import nicelee.ui.util.SwingDispatch;
 
 public class BatchDownloadThread extends Thread {
 
@@ -89,7 +91,7 @@ public class BatchDownloadThread extends Thread {
 								addTask(clip);
 								DownloadRunnable downThread = new DownloadRunnable(avInfo, clip,
 										VideoQualityEnum.getQN(Global.menu_qn));
-								Global.queryThreadPool.execute(downThread);
+								DownloadTaskDispatcher.submit(downThread);
 							}
 							stopFlag = true;
 							break;
@@ -99,7 +101,7 @@ public class BatchDownloadThread extends Thread {
 							addTask(clip);
 							DownloadRunnable downThread = new DownloadRunnable(avInfo, clip,
 									VideoQualityEnum.getQN(Global.menu_qn));
-							Global.queryThreadPool.execute(downThread);
+							DownloadTaskDispatcher.submit(downThread);
 						}
 					}
 					Logger.printf("当前url: %s ,page: %d, 分页查询完毕", batch.getUrl(), page);
@@ -128,8 +130,13 @@ public class BatchDownloadThread extends Thread {
 			String docsUrl = "https://nICEnnnnnnnLee.github.io/BilibiliDown/guide/advanced/quick-batch-download";
 			String warning = "批量下载配置不存在`" + configFilePath + "`!\r\n请参考配置" + docsUrl;
 			Object[] options = { "确认", "前往参考文档" };
-			int m = JOptionPane.showOptionDialog(null, warning, "错误", JOptionPane.YES_NO_OPTION,
-					JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+			int m = SwingDispatch.callAndWait(new Callable<Integer>() {
+				@Override
+				public Integer call() {
+					return JOptionPane.showOptionDialog(null, warning, "错误", JOptionPane.YES_NO_OPTION,
+							JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+				}
+			}).intValue();
 			if (m == 1) {
 				if (Desktop.isDesktopSupported())
 					Desktop.getDesktop().browse(new URI(docsUrl));
@@ -137,7 +144,7 @@ public class BatchDownloadThread extends Thread {
 					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 					Transferable trans = new StringSelection(docsUrl);
 					clipboard.setContents(trans, null);
-					JOptionPane.showMessageDialog(null, "相关网页链接已复制到剪贴板");
+					showMessageDialog(null, "相关网页链接已复制到剪贴板", "提示", JOptionPane.INFORMATION_MESSAGE);
 				}
 			}
 			throw new RuntimeException("配置文件`" + configFilePath + "`不存在");
@@ -149,6 +156,11 @@ public class BatchDownloadThread extends Thread {
 	
 	public void showMessageDialog(Component parentComponent, String message, String title, int messageType)
 			throws HeadlessException {
-		JOptionPane.showMessageDialog(parentComponent, message, title, messageType);
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				JOptionPane.showMessageDialog(parentComponent, message, title, messageType);
+			}
+		});
 	}
 }

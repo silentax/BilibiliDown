@@ -2,6 +2,7 @@ package nicelee.ui;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.concurrent.Callable;
 
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.model.VideoInfo;
@@ -12,6 +13,8 @@ import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.SysUtil;
 import nicelee.ui.item.JOptionPane;
 import nicelee.ui.thread.DownloadRunnable;
+import nicelee.ui.thread.DownloadTaskDispatcher;
+import nicelee.ui.util.SwingDispatch;
 
 /**
  * 初始化检查要放在配置文件读取之后
@@ -31,7 +34,12 @@ public class InitCheck {
 			String tips = "检测到程序对于数据目录没有“写”权限，可能无法正常工作。\n"
 					+ "建议设置JVM参数 -Dbilibili.prop.dataDirPath={dataDirPath} 指定有读写权限的数据目录位置。\n当前数据目录为: "
 					+ f.getAbsolutePath();
-			JOptionPane.showMessageDialog(null, tips);
+			SwingDispatch.runAndWait(new Runnable() {
+				@Override
+				public void run() {
+					JOptionPane.showMessageDialog(null, tips);
+				}
+			});
 		}
 	}
 
@@ -46,20 +54,30 @@ public class InitCheck {
 
 		if (isFFmpegSupported) {
 			Object[] options = { "是", "否" };
-			int m = JOptionPane.showOptionDialog(null,
-					"检测到当前没有ffmpeg环境, mp4及小部分flv文件将无法转码或合并.\r\n     是否下载ffmpeg(自编译, 3M左右)?", "请选择：",
-					JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+			int m = SwingDispatch.callAndWait(new Callable<Integer>() {
+				@Override
+				public Integer call() {
+					return JOptionPane.showOptionDialog(null,
+							"检测到当前没有ffmpeg环境, mp4及小部分flv文件将无法转码或合并.\r\n     是否下载ffmpeg(自编译, 3M左右)?",
+							"请选择：", JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE, null, options,
+							options[0]);
+				}
+			}).intValue();
 			Logger.println(m);
 			if (m == 0) {
 				VideoInfo avInfo = new INeedAV().getVideoDetail("ffmpeg", 0, false);
 				DownloadRunnable downThread = new DownloadRunnable(avInfo, avInfo.getClips().get(1234L), 0);
-				Global.queryThreadPool.execute(downThread);
+				DownloadTaskDispatcher.submit(downThread);
 				return;
 			}
 		}
 
-		JOptionPane.showMessageDialog(null, missingFFmpegMessage(), "请注意!!",
-				JOptionPane.WARNING_MESSAGE);
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				JOptionPane.showMessageDialog(null, missingFFmpegMessage(), "请注意!!", JOptionPane.WARNING_MESSAGE);
+			}
+		});
 	}
 
 	private static String missingFFmpegMessage() {

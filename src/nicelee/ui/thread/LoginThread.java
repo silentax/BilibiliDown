@@ -5,7 +5,9 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpCookie;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 import javax.swing.ImageIcon;
 
@@ -22,6 +24,7 @@ import nicelee.ui.DialogLogin;
 import nicelee.ui.DialogSMSLogin;
 import nicelee.ui.FrameQRCode;
 import nicelee.ui.Global;
+import nicelee.ui.util.SwingDispatch;
 
 public class LoginThread extends Thread {
 
@@ -88,8 +91,13 @@ public class LoginThread extends Thread {
 			QRLogin(inl);
 			break;
 		case "sms":
-			DialogSMSLogin dialog = new DialogSMSLogin(inl);
-			dialog.init();
+			SwingDispatch.runAndWait(new Runnable() {
+				@Override
+				public void run() {
+					DialogSMSLogin dialog = new DialogSMSLogin(inl);
+					dialog.init();
+				}
+			});
 			break;
 		default:
 			QRLogin(inl);
@@ -119,8 +127,13 @@ public class LoginThread extends Thread {
 	 * @param inl
 	 */
 	private void PwdLogin(INeedLogin inl) {
-		DialogLogin dialog = new DialogLogin(inl);
-		dialog.init();
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				DialogLogin dialog = new DialogLogin(inl);
+				dialog.init();
+			}
+		});
 	}
 	
 	/**
@@ -136,8 +149,14 @@ public class LoginThread extends Thread {
 		System.out.println("正在获取验证AuthKey以生成二维码...");
 		String authKey = inl.getAuthKey();
 		// 显示二维码图片
-		FrameQRCode qr = new FrameQRCode(inl.qrCodeStr);
-		qr.initUI();
+		final FrameQRCode qr = SwingDispatch.callAndWait(new Callable<FrameQRCode>() {
+			@Override
+			public FrameQRCode call() {
+				FrameQRCode frame = new FrameQRCode(inl.qrCodeStr);
+				frame.initUI();
+				return frame;
+			}
+		});
 
 		/**
 		 * 2. 周期性Post 访问 https://passport.bilibili.com/qrcode/getLoginInfo 直至扫码成功
@@ -157,7 +176,12 @@ public class LoginThread extends Thread {
 		}
 		// 销毁图片
 		System.out.println("登录线程结束...");
-		qr.dispose();
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				qr.dispose();
+			}
+		});
 	}
 
 	/**
@@ -166,19 +190,17 @@ public class LoginThread extends Thread {
 	 * @param inl
 	 */
 	public void initUserInfo(INeedLogin inl) {
-		// 设置当前头像
+		ImageIcon loadedAvatar = null;
 		try {
-			// System.out.println(inl.user.getPoster());
 			URL fileURL = new URL(inl.user.getPoster());
 			ImageIcon imag1 = new ImageIcon(fileURL);
-			imag1 = new ImageIcon(imag1.getImage().getScaledInstance(80, 80, Image.SCALE_DEFAULT));
-			Global.index.jlHeader.setToolTipText("当前用户为: " + inl.user.getName());
-			Global.index.jlHeader.setIcon(imag1);
-			// Global.index.jlHeader.removeMouseListener(Global.index);
+			loadedAvatar = new ImageIcon(imag1.getImage().getScaledInstance(80, 80, Image.SCALE_DEFAULT));
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
 		}
-		// 设置收藏夹
+
+		List<FavList> loadedFavorites = new ArrayList<FavList>();
+		boolean favoritesLoaded = false;
 		try {
 			String favUrl = "https://api.bilibili.com/medialist/gateway/base/created?pn=1&ps=100&is_space=0&jsonp=jsonp&up_mid="
 					+ inl.user.getUid();
@@ -188,17 +210,37 @@ public class LoginThread extends Thread {
 //			System.out.println(favUrl);
 //			System.out.println(jsonStr);
 			JSONArray list = new JSONObject(jsonStr).getJSONObject("data").getJSONArray("list");
-			if (Global.index.cmbFavList.getItemCount() == 1) {
-				Global.index.cmbFavList.addItem("稍后再看");
-				for (int i = 0; i < list.length(); i++) {
-					JSONObject favlist = list.getJSONObject(i);
-					FavList fav = new FavList(favlist.getLong("mid"), favlist.getLong("id"),
-							favlist.getInt("media_count"), favlist.getString("title"));
-					Global.index.cmbFavList.addItem(fav);
-				}
+			for (int i = 0; i < list.length(); i++) {
+				JSONObject favlist = list.getJSONObject(i);
+				loadedFavorites.add(new FavList(favlist.getLong("mid"), favlist.getLong("id"),
+						favlist.getInt("media_count"), favlist.getString("title")));
 			}
+			favoritesLoaded = true;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
+		final ImageIcon avatar = loadedAvatar;
+		final List<FavList> favorites = loadedFavorites;
+		final boolean applyFavorites = favoritesLoaded;
+		final String userName = inl.user.getName();
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (Global.index == null) {
+					return;
+				}
+				Global.index.jlHeader.setToolTipText("当前用户为: " + userName);
+				if (avatar != null) {
+					Global.index.jlHeader.setIcon(avatar);
+				}
+				if (applyFavorites && Global.index.cmbFavList.getItemCount() == 1) {
+					Global.index.cmbFavList.addItem("稍后再看");
+					for (FavList favorite : favorites) {
+						Global.index.cmbFavList.addItem(favorite);
+					}
+				}
+			}
+		});
 	}
 }

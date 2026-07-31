@@ -24,6 +24,7 @@ import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
 import nicelee.ui.item.MJButton;
+import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.DownloadRunnable;
 
 public class TabVideo extends JPanel implements ActionListener, MouseListener {
@@ -193,6 +194,30 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		nextPagePanel.add(jlNextPageTips);
 		nextPagePanel.add(btnNextPage);
 	}
+
+	/**
+	 * 切换详情页加载状态。此方法必须在 Swing EDT 调用。
+	 */
+	public void setLoading(boolean loading) {
+		cbQn.setEnabled(!loading);
+		btnDownAll.setEnabled(!loading);
+		btnDownCC.setEnabled(!loading);
+		btnNextPage.setEnabled(!loading);
+		if (loading) {
+			lbAvPrivew.setIcon(null);
+			lbAvPrivew.setText("正在解析...");
+		}
+	}
+
+	public void setLoadFailed(String message) {
+		setLoading(false);
+		cbQn.setEnabled(false);
+		btnDownAll.setEnabled(false);
+		btnDownCC.setEnabled(false);
+		btnNextPage.setEnabled(false);
+		lbAvPrivew.setIcon(null);
+		lbAvPrivew.setText(message);
+	}
 	
 	/**
 	 * 用于批量下载视频
@@ -201,7 +226,13 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	 * @param qn
 	 */
 	public void download(boolean downAll, int qn) {
+		if (avInfo == null) {
+			return;
+		}
 		int total = avInfo.getClips().values().size();
+		if (total == 0) {
+			return;
+		}
 		download(0, qn);
 		if (downAll) {
 			for (int i = 1; i < total; i++) {
@@ -231,8 +262,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		try {
 			ClipInfo clip = (ClipInfo) avInfo.getClips().values().toArray()[i];
 			DownloadRunnable downThread = new DownloadRunnable(avInfo, clip, qn);
-			// new Thread(downThread).start();
-			Global.queryThreadPool.execute(downThread);
+			DownloadTaskDispatcher.submit(downThread);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

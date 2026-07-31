@@ -29,6 +29,7 @@ import nicelee.ui.thread.BatchDownloadRbyRThread;
 import nicelee.ui.thread.CookieRefreshThread;
 import nicelee.ui.thread.LoginThread;
 import nicelee.ui.thread.MonitoringThread;
+import nicelee.ui.util.SwingDispatch;
 
 public class FrameMain extends JFrame {
 
@@ -54,14 +55,15 @@ public class FrameMain extends JFrame {
 		}
 		// 初始化 - 检查对数据文件夹是否有“写”的权限
 		InitCheck.checkFileAccess();
-		// 显示过渡动画
-		Global.frWaiting = new FrameWaiting();
-		Global.frWaiting.start();
 
 		if (Global.lockCheck) {
 			if (ConfigUtil.isRunning()) {
-				Global.frWaiting.stop();
-				JOptionPane.showMessageDialog(null, "程序已经在运行!", "请注意!!", JOptionPane.WARNING_MESSAGE);
+				SwingDispatch.runAndWait(new Runnable() {
+					@Override
+					public void run() {
+						JOptionPane.showMessageDialog(null, "程序已经在运行!", "请注意!!", JOptionPane.WARNING_MESSAGE);
+					}
+				});
 				return;
 			}
 			ConfigUtil.createLock();
@@ -70,79 +72,102 @@ public class FrameMain extends JFrame {
 			}));
 		}
 		
-		nicelee.bilibili.util.custom.System.init(Global.syncServerTime);
-//		// 如果存在hosts文件，那么使之生效
-//		if (HostSetUtil.readHostsFromFile("config/hosts.config")) {
-//			HostSetUtil.injectHosts();
-//		}
-		// 初始化主题
-		initUITheme();
-		// 初始化UI
-		FrameMain main = new FrameMain();
-		main.InitUI();
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				initUITheme();
+				FrameMain frame = new FrameMain();
+				frame.InitUI();
+				frame.setVisible(true);
+				frame.setExtendedState(JFrame.NORMAL);
+				frame.toFront();
+			}
+		});
 
 		// 初始化监控线程，用于刷新下载面板
 		MonitoringThread th = new MonitoringThread();
 		th.start();
+		Global.index.showStartupStatus("界面已就绪，正在后台完成启动检查...");
+		startBackgroundInitialization(isFFmpegSupported);
+	}
 
-		// 尝试刷新cookie
-		INeedLogin inl = new INeedLogin();
-		String cookiesStr = inl.readCookies();
-		if (cookiesStr != null) {
-			Global.needToLogin = true;
-			if(Global.tryRefreshCookieOnStartup && !Global.runWASMinBrowser) {
-				HttpCookies.setGlobalCookies(HttpCookies.convertCookies(cookiesStr));
-				CookieRefreshThread.showTips = false;
-				CookieRefreshThread thCR = CookieRefreshThread.newInstance();
-				thCR.start();
+	private static void startBackgroundInitialization(final boolean isFFmpegSupported) {
+		Thread initialization = new Thread(new Runnable() {
+			@Override
+			public void run() {
 				try {
-					thCR.join();
-				} catch (InterruptedException e1) {
+					nicelee.bilibili.util.custom.System.init(Global.syncServerTime);
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-				CookieRefreshThread.showTips = true;
-			}
-		}
-		// 初始化 - 登录
-		LoginThread loginTh = new LoginThread();
-		loginTh.start();
 
-		// 初始化 - ffmpeg环境判断
-		InitCheck.checkFFmpeg(isFFmpegSupported);
-
-		//
-		if (Global.saveToRepo) {
-			RepoUtil.init(false);
-		}
-//		FrameQRCode qr = new FrameQRCode("https://www.bilibili.com/");
-//		qr.initUI();
-//		qr.dispose();
-		// 预扫描加载类
-		PackageScanLoader.validParserClasses.isEmpty();
-		if(Global.batchDownloadRbyRRunOnStartup) {
-			// 开始按计划周期性批量下载
-			new Thread(new Runnable() {
-				@Override
-				public void run() {
-					// 等待相关线程运行完毕
-					try {
-						loginTh.join();
-					} catch (InterruptedException e) {}
-					new BatchDownloadRbyRThread(Global.batchDownloadConfigName).start();
+				// 尝试刷新 cookie；等待发生在后台，不再阻塞主窗口显示。
+				try {
+					INeedLogin inl = new INeedLogin();
+					String cookiesStr = inl.readCookies();
+					if (cookiesStr != null) {
+						Global.needToLogin = true;
+						if (Global.tryRefreshCookieOnStartup && !Global.runWASMinBrowser) {
+							HttpCookies.setGlobalCookies(HttpCookies.convertCookies(cookiesStr));
+							CookieRefreshThread.showTips = false;
+							CookieRefreshThread refreshThread = CookieRefreshThread.newInstance();
+							refreshThread.start();
+							try {
+								refreshThread.join();
+							} catch (InterruptedException e) {
+								Thread.currentThread().interrupt();
+							} finally {
+								CookieRefreshThread.showTips = true;
+							}
+						}
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-			}).start();
-		}
-		System.out.println("如果过度界面显示时间过长，可双击跳过");
-		try {
-			while (Global.frWaiting.isVisible()) {
-				Thread.sleep(1000);
+
+				final LoginThread loginThread = new LoginThread();
+				loginThread.setName("Thread-StartupLogin");
+				loginThread.start();
+
+				try {
+					InitCheck.checkFFmpeg(isFFmpegSupported);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				try {
+					if (Global.saveToRepo) {
+						RepoUtil.init(false);
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				try {
+					PackageScanLoader.validParserClasses.isEmpty();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+				if (Global.batchDownloadRbyRRunOnStartup) {
+					Thread batchStarter = new Thread(new Runnable() {
+						@Override
+						public void run() {
+							try {
+								loginThread.join();
+							} catch (InterruptedException e) {
+								Thread.currentThread().interrupt();
+								return;
+							}
+							new BatchDownloadRbyRThread(Global.batchDownloadConfigName).start();
+						}
+					}, "Thread-StartupBatchDownload");
+					batchStarter.setDaemon(true);
+					batchStarter.start();
+				}
+				Global.index.showStartupStatus("启动检查完成，可以开始解析作品");
 			}
-		} catch (InterruptedException e) {
-			Global.frWaiting.stop();
-		}
-		Global.frWaiting = null;
-		main.setVisible(true);
-		main.setExtendedState(JFrame.NORMAL);
-		main.toFront();
+		}, "Thread-BackgroundInitialization");
+		initialization.setDaemon(true);
+		initialization.start();
 	}
 
 	/**

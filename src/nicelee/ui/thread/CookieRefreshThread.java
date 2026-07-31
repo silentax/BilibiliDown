@@ -20,7 +20,6 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 
-import nicelee.ui.item.JOptionPane;
 import nicelee.ui.item.JOptionPaneManager;
 
 import org.json.JSONObject;
@@ -139,7 +138,7 @@ public class CookieRefreshThread extends Thread {
 			shutDownServerAsyncDelay();
 			if (getRefreshCsrf() == null) {
 				Logger.println("没有收到浏览器传来的refreshCsrf参数");
-				JOptionPane.showMessageDialog(null, "没有收到浏览器传来的refreshCsrf参数");
+				JOptionPaneManager.alertErrMsgWithNewThread("Cookie 刷新失败", "没有收到浏览器传来的 refreshCsrf 参数");
 				return;
 			}
 		} else {
@@ -202,8 +201,8 @@ public class CookieRefreshThread extends Thread {
 			Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 			Transferable trans = new StringSelection(browseUrl);
 			clipboard.setContents(trans, null);
-			JOptionPane.showMessageDialog(null, "请通过浏览器访问以下网址(已复制到剪贴板):\n" + browseUrl, "请注意",
-					JOptionPane.WARNING_MESSAGE);
+			JOptionPaneManager.alertErrMsgWithNewThread("请注意",
+					"请通过浏览器访问以下网址(已复制到剪贴板):\n" + browseUrl);
 		}
 	}
 

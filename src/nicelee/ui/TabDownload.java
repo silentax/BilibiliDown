@@ -1,12 +1,12 @@
 package nicelee.ui;
 
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -19,6 +19,8 @@ import nicelee.ui.item.DownloadInfoPanel;
 import nicelee.ui.item.JOptionPane;
 import nicelee.ui.item.MJButton;
 import nicelee.ui.thread.DownloadExecutors;
+import nicelee.ui.util.SwingDispatch;
+import nicelee.bilibili.util.Logger;
 
 public class TabDownload extends JPanel implements ActionListener {
 
@@ -26,25 +28,78 @@ public class TabDownload extends JPanel implements ActionListener {
 	 * 
 	 */
 	private static final long serialVersionUID = 8714599826187286737L;
-	private static boolean stopAll = false;
+	private static volatile boolean stopAll = false;
 	ImageIcon backgroundIcon = Global.backgroundImg;
 
 	JPanel jpContent;
 	JScrollPane jpScorll;
 	JLabel lbStatus;
 	JButton btnContinue, btnStop, btnDeleteAll, btnDeleteDown;
+	private final AtomicInteger preparingTaskCount = new AtomicInteger();
+	private volatile int lastTotalTask;
+	private volatile int lastActiveTask;
+	private volatile int lastPauseTask;
+	private volatile int lastDoneTask;
+	private volatile int lastQueuingTask;
 	public TabDownload() {
 		initUI();
 	}
 
-	public int activeTask;
-	public void refreshStatus(int totalTask,int activeTask,int pauseTask,int doneTask,int queuingTask) {
-		this.activeTask = activeTask;
-		String txt = String.format(" 总计: %d / 下载中 : %d / 暂停 : %d / 下载完 : %d / 队列中 : %d", 
-				totalTask, activeTask, pauseTask, doneTask, queuingTask);
-		if (lbStatus != null) {
-			lbStatus.setText(txt);
-		}
+	public volatile int activeTask;
+	public void refreshStatus(int totalTask, int activeTask, int pauseTask, int doneTask, int queuingTask) {
+		lastTotalTask = totalTask;
+		lastActiveTask = activeTask;
+		lastPauseTask = pauseTask;
+		lastDoneTask = doneTask;
+		lastQueuingTask = queuingTask;
+		requestStatusRefresh();
+	}
+
+	public void beginPreparingTask() {
+		preparingTaskCount.incrementAndGet();
+		requestStatusRefresh();
+	}
+
+	public void finishPreparingTask() {
+		preparingTaskCount.updateAndGet(value -> value > 0 ? value - 1 : 0);
+		requestStatusRefresh();
+	}
+
+	public int getPreparingTaskCount() {
+		return preparingTaskCount.get();
+	}
+
+	private void requestStatusRefresh() {
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				int preparing = preparingTaskCount.get();
+				activeTask = lastActiveTask;
+				String txt = String.format(
+						" 总计: %d / 准备: %d / 下载中: %d / 暂停: %d / 完成: %d / 队列: %d",
+						lastTotalTask + preparing, preparing, lastActiveTask, lastPauseTask, lastDoneTask,
+						lastQueuingTask);
+				if (lbStatus != null && !txt.equals(lbStatus.getText())) {
+					lbStatus.setText(txt);
+				}
+			}
+		});
+	}
+
+	public void addTaskPanel(DownloadInfoPanel panel) {
+		jpContent.add(panel);
+		resizeTaskPanel();
+	}
+
+	public void removeTaskPanel(DownloadInfoPanel panel) {
+		jpContent.remove(panel);
+		resizeTaskPanel();
+	}
+
+	private void resizeTaskPanel() {
+		jpContent.setPreferredSize(new Dimension(1100, Math.max(300, 128 * jpContent.getComponentCount())));
+		jpContent.revalidate();
+		jpContent.repaint();
 	}
 
 	public void initUI() {
@@ -55,11 +110,12 @@ public class TabDownload extends JPanel implements ActionListener {
 
 		// 状态 totalTask, activeTask, pauseTask, doneTask, queuingTask
 		lbStatus = new JLabel();
-		lbStatus.setPreferredSize(new Dimension(350, 30));
+		lbStatus.setPreferredSize(new Dimension(500, 30));
 		lbStatus.setOpaque(true);
 		lbStatus.setBackground(new Color(204, 255, 255));
 		lbStatus.setBorder(BorderFactory.createLineBorder(Color.BLUE));
 		this.add(lbStatus);
+		requestStatusRefresh();
 
 		// 功能按钮
 		btnContinue = new MJButton("全部继续");
@@ -136,31 +192,49 @@ public class TabDownload extends JPanel implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == btnContinue) {
 			stopAll = false;
-			for(int i = 0; i < jpContent.getComponentCount(); i++) {
-				Component comp = jpContent.getComponent(i);
-				if(comp instanceof DownloadInfoPanel ) {
-					((DownloadInfoPanel)comp).setFailCnt(0);
-					((DownloadInfoPanel)comp).continueTask();
+			btnContinue.setEnabled(false);
+			Thread continueThread = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						for (DownloadInfoPanel panel : Global.downloadTaskList.keySet()) {
+							try {
+								panel.setFailCnt(0);
+								panel.continueTask();
+							} catch (RuntimeException error) {
+								Logger.println("继续下载任务失败: " + error.getClass().getSimpleName());
+							}
+						}
+					} finally {
+						SwingDispatch.runLater(new Runnable() {
+							@Override
+							public void run() {
+								btnContinue.setEnabled(true);
+							}
+						});
+					}
 				}
-			}
+			}, "Thread-ContinueAllDownloads");
+			continueThread.setDaemon(true);
+			continueThread.start();
 		} else if (e.getSource() == btnStop) {
 			// 约3s后置false
 			stopAll = true;
 			btnContinue.setEnabled(false);
 			btnStop.setEnabled(false);
 			btnDeleteAll.setEnabled(false);
-			// 先shutdown, 队列里的线程无需再执行
-			Global.downLoadThreadPool.shutdownNow();
-			for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
-				dp.stopTask();
-			}
-			// 停止进程需要时间, 期间最好不进行其他操作
-			new Thread(new Runnable() {
+			// 停止进程可能涉及 I/O，放到后台，避免阻塞 EDT。
+			Thread stopThread = new Thread(new Runnable() {
 				@Override
 				public void run() {
+					Global.downLoadThreadPool.shutdownNow();
+					for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
+						dp.stopTask();
+					}
 					try {
 						Thread.sleep(3000);
 					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
 					}
 					//双保险
 					for(DownloadInfoPanel dp : Global.downloadTaskList.keySet()) {
@@ -168,12 +242,20 @@ public class TabDownload extends JPanel implements ActionListener {
 					}
 					int fixPool = Global.downloadPoolSize;
 					Global.downLoadThreadPool = DownloadExecutors.newPriorityFixedThreadPool(fixPool);
-					btnContinue.setEnabled(true);
-					btnStop.setEnabled(true);
-					btnDeleteAll.setEnabled(true);
 					stopAll = false;
+					SwingDispatch.runLater(new Runnable() {
+						@Override
+						public void run() {
+							btnContinue.setEnabled(true);
+							btnStop.setEnabled(true);
+							btnDeleteAll.setEnabled(true);
+						}
+					});
 				}
-				}).start();
+			});
+			stopThread.setName("Thread-StopAllDownloads");
+			stopThread.setDaemon(true);
+			stopThread.start();
 			} else if (e.getSource() == btnDeleteAll) {
 				if (!Global.downloadTaskList.isEmpty()) {
 					Object[] options = { "移除全部", "取消" };

@@ -64,6 +64,7 @@ public class MJTabVideo extends TabVideo {// implements MouseListener, ActionLis
 		btnNextPage.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				btnNextPage.setEnabled(false);
 				Pattern paramPattern = Pattern.compile("(.*)p=([0-9]+)$");
 				int page = 1;
 				String modifiedSearchContent = null;
@@ -77,9 +78,16 @@ public class MJTabVideo extends TabVideo {// implements MouseListener, ActionLis
 				Logger.println(modifiedSearchContent);
 				JLabel label = new JLabel("正在加载中...");
 				final TabVideo tab = new MJTabVideo(jTabbedpane, label, modifiedSearchContent);
+				tab.setLoading(true);
 				jTabbedpane.addTab("作品页", tab);
 				jTabbedpane.setTabComponentAt(jTabbedpane.indexOfComponent(tab), label);
-				GetVideoDetailThread th = new GetVideoDetailThread(tab, modifiedSearchContent);
+				GetVideoDetailThread th = new GetVideoDetailThread(tab, modifiedSearchContent,
+						new GetVideoDetailThread.Listener() {
+							@Override
+							public void onFinished(boolean success, String message) {
+								btnNextPage.setEnabled(true);
+							}
+						});
 				th.start();
 				jTabbedpane.setSelectedComponent(tab);
 			}

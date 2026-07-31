@@ -28,6 +28,7 @@ import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
 import nicelee.ui.TabVideo;
+import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.DownloadRunnable;
 
 public class ClipInfoPanel extends JPanel implements MouseListener {
@@ -76,7 +77,7 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 				@Override
 				public void actionPerformed(ActionEvent e) {
 					DownloadRunnable downThread = new DownloadRunnable(video, clip, 801);
-					Global.queryThreadPool.execute(downThread);
+					DownloadTaskDispatcher.submit(downThread);
 				}
 			});
 			this.add(btnDanmuku);
@@ -114,8 +115,7 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				DownloadRunnable downThread = new DownloadRunnable(video, clip, qn);
-				// new Thread(downThread).start();
-				Global.queryThreadPool.execute(downThread);
+				DownloadTaskDispatcher.submit(downThread);
 			}
 		});
 		this.add(btn);

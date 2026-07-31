@@ -2,9 +2,8 @@ package nicelee.ui.item;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import nicelee.ui.item.JOptionPane;
-
 import nicelee.ui.Global;
+import nicelee.ui.util.SwingDispatch;
 
 public class JOptionPaneManager {
 
@@ -19,59 +18,40 @@ public class JOptionPaneManager {
 		instance4ErrMsg.showMsgWithNewThread0(title, msg, true);
 	}
 
-//	public static void alertErrMsg(String title, String msg) {
-//		instance4ErrMsg.showMsg0(title, msg, true);
-//	}
+	private final ConcurrentLinkedQueue<Object> promptTokens = new ConcurrentLinkedQueue<Object>();
 
-	private ConcurrentLinkedQueue<Thread> promptThreads = new ConcurrentLinkedQueue<Thread>();
+	/**
+	 * 保留旧方法名以兼容调用方；实际统一调度到 Swing EDT。
+	 */
+	private void showMsgWithNewThread0(final String title, final String msg, boolean isErrMsg) {
+		if (!Global.isAlertIfDownloded && !isErrMsg) {
+			return;
+		}
+		final Object token = new Object();
+		synchronized (promptTokens) {
+			if (promptTokens.size() >= Global.maxAlertPrompt) {
+				return;
+			}
+			promptTokens.add(token);
+		}
 
-//	private void showMsg0(String title, String msg, boolean isErrMsg) {
-//		if ((Global.isAlertIfDownloded || isErrMsg) && promptThreads.size() < Global.maxAlertPrompt) {
-//			promptThreads.add(Thread.currentThread());
-//
-//			Object[] options = { "关闭", "关闭所有" };
-//			int m = JOptionPane.showOptionDialog(null, msg, title, JOptionPane.YES_NO_OPTION, JOptionPane.PLAIN_MESSAGE,
-//					null, options, options[0]);
-//			synchronized (promptThreads) {
-//				if (m == 1) {
-//					interruptAllThread();
-//				} else {
-//					promptThreads.remove(Thread.currentThread());
-//				}
-//			}
-//		}
-//	}
-
-	private void showMsgWithNewThread0(String title, String msg, boolean isErrMsg) {
-		if ((Global.isAlertIfDownloded || isErrMsg) && promptThreads.size() < Global.maxAlertPrompt) {
-			Thread t = new Thread(new Runnable() {
-				public void run() {
-					Object[] options = { "关闭", "关闭所有" };
-					int m = JOptionPane.showOptionDialog(null, msg, title, JOptionPane.YES_NO_OPTION,
-							JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-					// System.out.println(m);
-					
-					synchronized (promptThreads) {
-						if (m == 1) {
-							interruptAllThread();
-						} else {
-							promptThreads.remove(Thread.currentThread());
-						}
+		SwingDispatch.runLater(new Runnable() {
+			@Override
+			public void run() {
+				if (!promptTokens.contains(token)) {
+					return;
+				}
+				Object[] options = { "关闭", "关闭所有" };
+				int selected = JOptionPane.showOptionDialog(null, msg, title, JOptionPane.YES_NO_OPTION,
+						JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+				synchronized (promptTokens) {
+					if (selected == 1) {
+						promptTokens.clear();
+					} else {
+						promptTokens.remove(token);
 					}
 				}
-			});
-			promptThreads.add(t);
-			t.start();
-		}
-	}
-
-	private void interruptAllThread() {
-		// 不管怎样，先移除当前线程
-		promptThreads.remove(Thread.currentThread());
-		for (Thread t : promptThreads) {
-			if (t.isAlive()) {
-				t.interrupt();
 			}
-		}
+		});
 	}
 }
