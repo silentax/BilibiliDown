@@ -23,6 +23,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify commit author privacy
+        shell: bash
+        run: |
+          author_email="$(git log -1 --format=%ae)"
+          case "$author_email" in
+            *@users.noreply.github.com) ;;
+            *)
+              echo "::error::Commit author email must use a GitHub noreply address."
+              exit 1
+              ;;
+          esac
+
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 

@@ -36,11 +36,6 @@ public class ConfigUtil {
 	 */
 	public static boolean isRunning() {
 		File lockFile = new File(ResourcesUtil.baseDirectory(), "config/.lock");
-		try {
-			System.out.println(lockFile.getCanonicalPath());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		return lockFile.isFile();
 	}
 

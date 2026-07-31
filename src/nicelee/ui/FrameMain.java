@@ -21,7 +21,6 @@ import nicelee.bilibili.util.CmdUtil;
 import nicelee.bilibili.util.ConfigUtil;
 import nicelee.bilibili.util.HttpCookies;
 import nicelee.bilibili.util.RepoUtil;
-import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.SysUtil;
 import nicelee.ui.item.MJMenuBar;
 import nicelee.ui.thread.BatchDownloadRbyRThread;
@@ -47,7 +46,6 @@ public class FrameMain extends JFrame {
 		// System.getProperties().setProperty("file.encoding", "utf-8");
 		boolean isFFmpegSupported = SysUtil.surportFFmpegOfficially();
 		System.out.println("Java version:" + System.getProperty("java.specification.version"));
-		System.out.println(ResourcesUtil.baseDirectory());
 		// 读取配置文件
 		ConfigUtil.initConfigs();
 		// -v 打印版本，然后退出

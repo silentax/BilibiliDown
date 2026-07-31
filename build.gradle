@@ -131,6 +131,14 @@ tasks.register('credentialSecurityTest', JavaExec) {
     mainClass = 'nicelee.test.security.CredentialSecurityTest'
 }
 
+tasks.register('repositoryPrivacyTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies that tracked files do not expose credentials, personal paths, or runtime configuration.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.RepositoryPrivacyTest'
+}
+
 tasks.register('uiExperienceTest', JavaExec) {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = 'Verifies EDT dispatching and download progress formatting.'
@@ -141,10 +149,10 @@ tasks.register('uiExperienceTest', JavaExec) {
 }
 
 tasks.named('check') {
-	dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
-			tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
-			tasks.named('sourcePluginSecurityTest'), tasks.named('credentialSecurityTest'),
-			tasks.named('uiExperienceTest')
+    dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
+            tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
+            tasks.named('sourcePluginSecurityTest'), tasks.named('credentialSecurityTest'),
+            tasks.named('repositoryPrivacyTest'), tasks.named('uiExperienceTest')
 }
 
 tasks.named('jar') {

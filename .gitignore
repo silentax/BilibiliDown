@@ -31,6 +31,17 @@ simplelogger.properties
 /.idea
 /.gradle
 /build
+/release/BilibiliDown.desktop
+**/app.config.new
+**/cookies.config
+**/fingerprint.config
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
 /parsers1
 /parsers
 /update

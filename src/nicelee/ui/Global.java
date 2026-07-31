@@ -262,7 +262,6 @@ public class Global {
 		} else if (!savePath.endsWith("/")) {
 			savePath += "/";
 		}
-		System.out.println("savePath: " + savePath);
 		Global.savePath = savePath;
 		Global.saveToRepo = Global.useRepo || Global.saveToRepo;
 		if (Global.deleteUserFile) {

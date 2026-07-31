@@ -94,9 +94,8 @@ public class HostSetUtil {
 		try {
 			configFile = new File(file);
 			if (!configFile.exists()) {
-				System.out.println("Hosts文件不存在： " + configFile.getCanonicalPath());
+				System.out.println("Hosts文件不存在，将尝试应用配置目录");
 				configFile = new File(ResourcesUtil.baseDirectory(), file);
-				System.out.println("尝试路径： " + configFile.getCanonicalPath());
 			}
 			buReader = new BufferedReader(new FileReader(configFile));
 			String config;
