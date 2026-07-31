@@ -9,8 +9,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 //import java.util.HashMap;
 import java.util.regex.Matcher;
@@ -82,10 +86,26 @@ public class ConfigUtil {
 	}
 
 	public static boolean saveConfig() {
+		Map<String, String> settingsSnapshot;
+		synchronized (Global.settings) {
+			settingsSnapshot = new LinkedHashMap<String, String>(Global.settings);
+		}
+		return saveConfig(settingsSnapshot);
+	}
+
+	public static synchronized boolean saveConfig(Map<String, String> settingsSnapshot) {
 		File source = ResourcesUtil.sourceOf("config/app.config");
 		File tmp = new File(source.getParentFile(), "app.config.new");
+		try {
+			if (!tmp.exists() && !tmp.createNewFile()) {
+				return false;
+			}
+			ResourcesUtil.restrictFileToOwner(tmp);
+		} catch (IOException e) {
+			return false;
+		}
 		try (BufferedWriter buWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmp), "utf-8"))) {
-			HashMap<String, String> copy = new LinkedHashMap<>(Global.settings);
+			HashMap<String, String> copy = new LinkedHashMap<String, String>(settingsSnapshot);
 			HashMap<String, String> notSaveYet = new LinkedHashMap<>(copy);
 			String line;
 			try (BufferedReader buReader = new BufferedReader(new InputStreamReader(new FileInputStream(source), "utf-8"))){
@@ -123,9 +143,20 @@ public class ConfigUtil {
 			System.err.println("保存文件失败!! ");
 			return false;
 		}
-		if(tmp.exists()) {
-			source.delete();
-			return tmp.renameTo(source);
+		if (tmp.exists()) {
+			ResourcesUtil.restrictFileToOwner(tmp);
+			try {
+				try {
+					Files.move(tmp.toPath(), source.toPath(), StandardCopyOption.ATOMIC_MOVE,
+							StandardCopyOption.REPLACE_EXISTING);
+				} catch (AtomicMoveNotSupportedException e) {
+					Files.move(tmp.toPath(), source.toPath(), StandardCopyOption.REPLACE_EXISTING);
+				}
+				ResourcesUtil.restrictFileToOwner(source);
+				return true;
+			} catch (IOException e) {
+				System.err.println("替换配置文件失败!! ");
+			}
 		}
 		return false;
 	}

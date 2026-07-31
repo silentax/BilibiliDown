@@ -343,3 +343,26 @@ bash package.sh
 ```
 
 以上命令已通过；Gradle 完整检查共执行 15 个任务，JAR headless smoke test 输出 `v6.41`，兼容打包脚本成功。真实密码登录、短信发送与登录、浏览器极验回调，以及登录窗口在真实 Windows/macOS 的缩放、系统字体和原生关闭行为仍为 `NOT VERIFIED`。B站可能继续调整登录接口或风控策略，失败时应优先使用二维码登录；下一轮重点治理设置页的固定宽度布局、组件三元组绑定和 EDT 同步保存。
+
+## 19. 设置页响应式与非阻塞保存里程碑
+
+截至 2026-07-31，设置页完成固定画布、脆弱组件索引绑定和 EDT 同步文件写入治理：
+
+- 页面从 1150px 固定 FlowLayout 迁移到 BorderLayout/GridBagLayout；设置内容实现 Scrollable 并跟随 viewport 宽度，长路径和窗口缩放不再依赖水平固定画布。
+- 每个配置项使用独立 SettingBinding 绑定 key、说明、编辑器、路径选择按钮和初始值；保存不再假设组件必须按“标签/输入/空白”三元组排列。
+- 筛选直接控制配置行可见性，不再销毁并重建全部 Swing 组件，因此筛选、清空后仍保留未保存的修改；修改项会即时高亮。
+- 同一时间只允许打开一个设置页；保存期间禁用编辑、筛选、重置和关闭，避免重复写入或关闭后丢失反馈；关闭未保存页面前提供明确确认。
+- 推送密码或凭证在设置页使用密码框遮罩显示，读取临时 `char[]` 后立即覆盖清零；系统密钥库迁移仍作为后续独立安全任务。
+- 保存时先在 EDT 采集不可变配置快照，再由 `Thread-SettingsSave` 后台写盘；完成后经 SwingDispatch 回到 EDT 更新全局配置、控件状态和成功/失败提示。
+- ConfigUtil 增加快照保存入口并串行化文件替换；临时配置从创建起收紧为 owner-only 权限，优先原子替换，文件系统不支持时安全回退为 replace-existing，不再先删除旧配置。
+- `uiExperienceTest` 增加设置页 BorderLayout/GridBagLayout、viewport 宽度跟随、显式 editor binding、固定 1150px 防回退、组件三元组防回退和后台保存线程检查。
+
+自动验收命令：
+
+```bash
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 uiExperienceTest securityTest
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 clean check
+bash package.sh
+```
+
+仍需人工验收：真实 Windows/macOS 下设置页窄窗口、长中文说明、超长目录、系统字体缩放、文件/目录选择器、只读配置目录保存失败，以及关闭未保存页面的确认交互均为 `NOT VERIFIED`。设置保存后依旧遵循现有语义：部分运行时配置需要重启应用才会生效。

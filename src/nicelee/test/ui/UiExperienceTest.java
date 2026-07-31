@@ -3,6 +3,9 @@ package nicelee.test.ui;
 import java.awt.BorderLayout;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -13,11 +16,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.JSplitPane;
+import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
 import nicelee.ui.TabDownload;
+import nicelee.ui.TabSettings;
 import nicelee.ui.TabVideo;
 import nicelee.ui.item.ClipInfoPanel;
 import nicelee.ui.item.DownloadInfoPanel;
@@ -34,6 +39,7 @@ public class UiExperienceTest {
 		testPreparingCounterIsThreadSafe();
 		testResponsiveDownloadLayouts();
 		testResponsiveVideoLayoutAndFeedback();
+		testResponsiveSettingsLayoutAndAsyncSave();
 		testBoundedQueryExecutor();
 		testDownloadProgressFormatting();
 		System.out.println("UI experience regression tests passed");
@@ -188,6 +194,34 @@ public class UiExperienceTest {
 		});
 		check(!tab.areDownloadActionsEnabled(), "video download actions must stay disabled after failure");
 		check("解析失败测试".equals(tab.getLoadStatusLabel().getText()), "video failure reason must be visible");
+	}
+
+	private static void testResponsiveSettingsLayoutAndAsyncSave() throws Exception {
+		TabSettings tab = SwingDispatch.callAndWait(new Callable<TabSettings>() {
+			@Override
+			public TabSettings call() {
+				return new TabSettings();
+			}
+		});
+		check(tab.getLayout() instanceof BorderLayout, "settings tab must resize with BorderLayout");
+		check(tab.getSettingsContentPanel().getLayout() instanceof GridBagLayout,
+				"settings rows must resize with GridBagLayout");
+		check(tab.getSettingsContentPanel() instanceof Scrollable
+				&& ((Scrollable) tab.getSettingsContentPanel()).getScrollableTracksViewportWidth(),
+				"settings content must track the viewport width");
+		check(tab.getEditorCount() > 0, "settings must create explicit editor bindings");
+		check(tab.isSensitiveEditorMasked("bilibili.download.push.token"),
+				"sensitive settings must not be displayed as plain text");
+		check(tab.getSettingsScrollPane().getHorizontalScrollBarPolicy() == javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER,
+				"settings must not depend on a fixed horizontal canvas");
+
+		String source = new String(Files.readAllBytes(Paths.get("src/nicelee/ui/TabSettings.java")),
+				StandardCharsets.UTF_8);
+		check(!source.contains("1150"), "settings must not restore the 1150px fixed canvas");
+		check(!source.contains("i += 3"), "settings save must not depend on component triplets");
+		check(source.contains("Thread-SettingsSave"), "settings file I/O must run in a background thread");
+		check(source.contains("ConfigUtil.saveConfig(settingsSnapshot)"),
+				"settings save must use an immutable UI snapshot");
 	}
 
 	private static void testBoundedQueryExecutor() throws Exception {
