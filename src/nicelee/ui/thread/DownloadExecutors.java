@@ -2,11 +2,16 @@ package nicelee.ui.thread;
 
 import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DownloadExecutors {
+	private static final int MAX_QUERY_THREADS = 4;
+	private static final int MAX_QUEUED_QUERIES = 256;
 
 	final static Comparator<DownloadRunnableInternal> comp;
 	static {
@@ -45,5 +50,28 @@ public class DownloadExecutors {
 		@SuppressWarnings("rawtypes")
 		PriorityBlockingQueue queue = new PriorityBlockingQueue<DownloadRunnableInternal>(11, comp);
 		return new ThreadPoolExecutor(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, queue);
+	}
+
+	public static int normalizeQueryPoolSize(int requestedSize) {
+		return Math.max(1, Math.min(MAX_QUERY_THREADS, requestedSize));
+	}
+
+	/**
+	 * 下载地址查询使用少量有界并发，避免大量分 P 时完全串行，同时限制请求突发和内存占用。
+	 */
+	public static ExecutorService newQueryThreadPool(int requestedSize) {
+		int threadCount = normalizeQueryPoolSize(requestedSize);
+		AtomicInteger threadNumber = new AtomicInteger();
+		ThreadFactory threadFactory = new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable runnable) {
+				Thread thread = new Thread(runnable, "Thread-DownloadQuery-" + threadNumber.incrementAndGet());
+				thread.setDaemon(true);
+				return thread;
+			}
+		};
+		return new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<Runnable>(MAX_QUEUED_QUERIES), threadFactory,
+				new ThreadPoolExecutor.AbortPolicy());
 	}
 }

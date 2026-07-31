@@ -34,7 +34,10 @@ public class RepoUtil {
 	static File fRepo; // 持久化文件，存放于config/repo.config
 	static Set<String> downRepo; // 已下载完成的av集合
 
-	public static void init(boolean refresh) {
+	public static synchronized void init(boolean refresh) {
+		if (!refresh && downRepo != null) {
+			return;
+		}
 		definitionStrictMode = Global.repoInDefinitionStrictMode;
 		if (fRepo == null || refresh) {
 			fRepo = ResourcesUtil.sourceOf("config/repo.config");
@@ -90,8 +93,10 @@ public class RepoUtil {
 	 * @param avRecord
 	 * @return
 	 */
-	public static boolean isInRepo(String avRecord) {
-		System.out.println("查询记录" + avRecord);
+	public static synchronized boolean isInRepo(String avRecord) {
+		if (downRepo == null) {
+			init(false);
+		}
 		if (avRecord.contains("-800-") || avRecord.contains("-801-") || avRecord.startsWith("FFmpeg")) {
 			return false;
 		}
@@ -113,7 +118,7 @@ public class RepoUtil {
 	 * <p> avRecord 必须符合avId-p-qn的形式 </p> 
 	 * @param avinfo
 	 */
-	public static void appendAndSave(String avRecord) {
+	public static synchronized void appendAndSave(String avRecord) {
 		System.out.println("已完成下载： " + avRecord);
 		if (avRecord.contains("-800-") || avRecord.contains("-801-")) {
 			Logger.println("字幕/弹幕文件，不计入下载记录");

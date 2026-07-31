@@ -61,7 +61,7 @@ public class MJMenuBar extends JMenuBar {
 	}
 	
 	private void init() {
-		this.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 0));
+		this.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 0));
 		/*
 		 * 创建一级菜单
 		 */

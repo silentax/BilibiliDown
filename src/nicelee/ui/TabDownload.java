@@ -1,8 +1,11 @@
 package nicelee.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
+import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -14,6 +17,7 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.border.EmptyBorder;
 
 import nicelee.ui.item.DownloadInfoPanel;
 import nicelee.ui.item.JOptionPane;
@@ -97,27 +101,28 @@ public class TabDownload extends JPanel implements ActionListener {
 	}
 
 	private void resizeTaskPanel() {
-		jpContent.setPreferredSize(new Dimension(1100, Math.max(300, 128 * jpContent.getComponentCount())));
+		jpContent.setPreferredSize(new Dimension(0, Math.max(300, 128 * jpContent.getComponentCount())));
 		jpContent.revalidate();
 		jpContent.repaint();
 	}
 
 	public void initUI() {
-//		//占位
-//		JLabel lbBlank1 = new JLabel();
-//		lbBlank1.setPreferredSize(new Dimension(300, 30));
-//		this.add(lbBlank1);
+		this.setLayout(new BorderLayout(0, 8));
+		JPanel toolbar = new JPanel(new BorderLayout(12, 0));
+		toolbar.setOpaque(false);
+		toolbar.setBorder(new EmptyBorder(8, 8, 0, 8));
 
 		// 状态 totalTask, activeTask, pauseTask, doneTask, queuingTask
 		lbStatus = new JLabel();
-		lbStatus.setPreferredSize(new Dimension(500, 30));
 		lbStatus.setOpaque(true);
 		lbStatus.setBackground(new Color(204, 255, 255));
 		lbStatus.setBorder(BorderFactory.createLineBorder(Color.BLUE));
-		this.add(lbStatus);
+		toolbar.add(lbStatus, BorderLayout.CENTER);
 		requestStatusRefresh();
 
 		// 功能按钮
+		JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+		actions.setOpaque(false);
 		btnContinue = new MJButton("全部继续");
 		btnStop = new MJButton("全部暂停");
 		btnDeleteAll = new MJButton("全部删除");
@@ -132,14 +137,17 @@ public class TabDownload extends JPanel implements ActionListener {
 		btnStop.addActionListener(this);
 		btnDeleteAll.addActionListener(this);
 		btnDeleteDown.addActionListener(this);
-		this.add(btnContinue);
-		this.add(btnStop);
-		this.add(btnDeleteAll);
-		this.add(btnDeleteDown);
+		actions.add(btnContinue);
+		actions.add(btnStop);
+		actions.add(btnDeleteAll);
+		actions.add(btnDeleteDown);
+		toolbar.add(actions, BorderLayout.EAST);
+		this.add(toolbar, BorderLayout.NORTH);
 
 		// 下载任务Panel
-		jpContent = new JPanel();
-		jpContent.setPreferredSize(new Dimension(1100, 300));
+		jpContent = new JPanel(new GridLayout(0, 1, 0, 8));
+		jpContent.setBorder(new EmptyBorder(8, 8, 8, 8));
+		jpContent.setPreferredSize(new Dimension(0, 300));
 		jpContent.setOpaque(false);
 
 //		DownloadInfoPanel downPan = new DownloadInfoPanel();
@@ -149,22 +157,25 @@ public class TabDownload extends JPanel implements ActionListener {
 		jpScorll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		jpScorll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 		// jpScorll.setBorder(BorderFactory.createLineBorder(Color.red));
-		jpScorll.setPreferredSize(new Dimension(1150, 620));
 		jpScorll.setOpaque(false);
 		jpScorll.getViewport().setOpaque(false);
-		this.add(jpScorll);
+		this.add(jpScorll, BorderLayout.CENTER);
 	}
 
 	@Override
 	public void paintComponent(Graphics og) {
-		if (ui == null || og == null) {
+		super.paintComponent(og);
+		if (og == null || backgroundIcon == null) {
 			return;
 		}
-		// https://docs.oracle.com/javase/8/docs/technotes/guides/troubleshoot/swing002.html#JSTGD472
 		Graphics g = og.create();
 		Image img = backgroundIcon.getImage();
 		int width = img.getWidth(this.getParent());
 		int height = img.getHeight(this.getParent());
+		if (width <= 0 || height <= 0) {
+			g.dispose();
+			return;
+		}
 		int xGap = 5;
 		int xCnt = this.getSize().width / (width + xGap) + 1;
 		int yGap = 5;
@@ -180,12 +191,7 @@ public class TabDownload extends JPanel implements ActionListener {
 		}else {
 			g.drawImage(backgroundIcon.getImage(), 0, 0, this.getSize().width, this.getSize().height, this.getParent());
 		}
-		this.setOpaque(false);
-		try {
-            ui.update(g, this);
-        } finally {
-        	g.dispose();
-        }
+		g.dispose();
 	}
 
 	@Override

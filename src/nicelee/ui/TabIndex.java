@@ -1,10 +1,14 @@
 package nicelee.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Image;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
@@ -24,6 +28,7 @@ import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.border.EmptyBorder;
 
 import nicelee.bilibili.enums.DownloadModeEnum;
 import nicelee.bilibili.model.FavList;
@@ -63,43 +68,32 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	}
 
 	public void init() {
-		this.setPreferredSize(new Dimension(1150, 620));
-//		OperationPanel operPanel = new OperationPanel();
-//		this.add(operPanel);
-		
-//		btnUpdate = new JLabel("<html>更新<br/>版本</html>", JLabel.CENTER);
-//		btnUpdate.setOpaque(true);
-//		btnUpdate.setPreferredSize(new Dimension(80, 80));
-//		btnUpdate.setFont(new Font("黑体", Font.BOLD, 30));
-//		btnUpdate.addMouseListener(this);
-//		this.add(btnUpdate);
-		
-		// 空白模块- 占位
-		JLabel jpBLANK = new JLabel();
-		jpBLANK.setPreferredSize(new Dimension(920, 80));
-		this.add(jpBLANK);
-		
-		// 空白模块- 占位
+		this.setLayout(new BorderLayout(0, 24));
+		this.setBorder(new EmptyBorder(36, 36, 36, 36));
+
+		JPanel headerPanel = new JPanel(new BorderLayout(16, 0));
+		headerPanel.setOpaque(false);
 		imgIconHeaderDefault = new ImageIcon(imgIconHeaderDefault.getImage().getScaledInstance(80, 80, Image.SCALE_DEFAULT));
 		jlHeader = new JLabel(imgIconHeaderDefault);
 		jlHeader.addMouseListener(this);
-		this.add(jlHeader);
-		
-//		// 空白模块- 占位
-//		JLabel jpBLANK1 = new JLabel();
-//		jpBLANK1.setPreferredSize(new Dimension(920, 80));
-//		this.add(jpBLANK1);
+		headerPanel.add(jlHeader, BorderLayout.EAST);
 
-		//头像模块
 		URL fileURL = this.getClass().getResource("/resources/title.png");
 		ImageIcon imgIcon = new ImageIcon(fileURL);
-		//imgIcon = new ImageIcon(imgIcon.getImage().getScaledInstance(350, 350, Image.SCALE_SMOOTH));
-		JLabel jLabel = new JLabel(imgIcon);
-		this.add(jLabel);
-		
-		// 查找模块
-		JPanel jpSearch = new JPanel();
-		txtSearch.setPreferredSize(new Dimension(540, 40));
+		JLabel titleLabel = new JLabel(imgIcon, JLabel.CENTER);
+		headerPanel.add(titleLabel, BorderLayout.CENTER);
+
+		JPanel searchPanel = new JPanel(new BorderLayout(0, 10));
+		searchPanel.setOpaque(false);
+		JPanel searchControls = new JPanel(new GridBagLayout());
+		searchControls.setOpaque(false);
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridy = 0;
+		constraints.insets = new Insets(0, 4, 0, 4);
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+
+		txtSearch.setPreferredSize(new Dimension(420, 40));
+		txtSearch.setMinimumSize(new Dimension(220, 40));
 		txtSearch.addActionListener(this);
 		btnSearch.addActionListener(this);
 		btnSearch.setPreferredSize(new Dimension(80, 40));
@@ -112,16 +106,29 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 		cmbDownloadMode.setPreferredSize(new Dimension(110, 40));
 		cmbDownloadMode.setSelectedIndex(Global.downloadMode.getMode());
 		cmbDownloadMode.addItemListener(this);
-		jpSearch.add(txtSearch);
-		jpSearch.add(cmbDownloadMode);
-		jpSearch.add(btnSearch);
-		jpSearch.add(btnSearchNextPage);
-		jpSearch.add(cmbFavList);
-		lbSearchStatus.setPreferredSize(new Dimension(1000, 24));
+
+		constraints.gridx = 0;
+		constraints.weightx = 1.0;
+		searchControls.add(txtSearch, constraints);
+		constraints.weightx = 0.0;
+		constraints.gridx++;
+		searchControls.add(cmbDownloadMode, constraints);
+		constraints.gridx++;
+		searchControls.add(btnSearch, constraints);
+		constraints.gridx++;
+		searchControls.add(btnSearchNextPage, constraints);
+		constraints.gridx++;
+		searchControls.add(cmbFavList, constraints);
+
 		lbSearchStatus.setForeground(new Color(60, 60, 60));
-		jpSearch.add(lbSearchStatus);
-		jpSearch.setOpaque(false);
-		this.add(jpSearch);
+		lbSearchStatus.setBorder(new EmptyBorder(2, 4, 2, 4));
+		searchPanel.add(searchControls, BorderLayout.NORTH);
+		searchPanel.add(lbSearchStatus, BorderLayout.CENTER);
+		JPanel topPanel = new JPanel(new BorderLayout(0, 24));
+		topPanel.setOpaque(false);
+		topPanel.add(headerPanel, BorderLayout.NORTH);
+		topPanel.add(searchPanel, BorderLayout.CENTER);
+		this.add(topPanel, BorderLayout.NORTH);
 		this.setOpaque(false);
 	}
 	
@@ -157,14 +164,18 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	}
 	@Override
 	public void paintComponent(Graphics og) {
-		if (ui == null || og == null) {
+		super.paintComponent(og);
+		if (og == null || backgroundIcon == null) {
 			return;
 		}
-		// https://docs.oracle.com/javase/8/docs/technotes/guides/troubleshoot/swing002.html#JSTGD472
 		Graphics g = og.create();
 		Image img = backgroundIcon.getImage();
 		int width = img.getWidth(this.getParent());
 		int height = img.getHeight(this.getParent());
+		if (width <= 0 || height <= 0) {
+			g.dispose();
+			return;
+		}
 		int xGap = 5;
 		int xCnt = this.getSize().width / (width + xGap) + 1;
 		int yGap = 5;
@@ -180,12 +191,7 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 		}else {
 			g.drawImage(backgroundIcon.getImage(), 0, 0, this.getSize().width, this.getSize().height, this.getParent());
 		}
-		this.setOpaque(false);
-		try {
-            ui.update(g, this);
-        } finally {
-        	g.dispose();
-        }
+		g.dispose();
 	}
 	
 	/**

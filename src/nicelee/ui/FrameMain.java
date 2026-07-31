@@ -1,12 +1,11 @@
 package nicelee.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.net.URL;
-import java.util.Enumeration;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -24,7 +23,7 @@ import nicelee.bilibili.util.HttpCookies;
 import nicelee.bilibili.util.RepoUtil;
 import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.SysUtil;
-import nicelee.ui.item.MJTitleBar;
+import nicelee.ui.item.MJMenuBar;
 import nicelee.ui.thread.BatchDownloadRbyRThread;
 import nicelee.ui.thread.CookieRefreshThread;
 import nicelee.ui.thread.LoginThread;
@@ -38,10 +37,13 @@ public class FrameMain extends JFrame {
 	 */
 	private static final long serialVersionUID = 1L;
 	JTabbedPane jTabbedpane;// 存放选项卡的组件
-	MJTitleBar titleBar;// 标题栏组件
 
 	public static void main(String[] args) {
 		System.out.println();
+		if (SysUtil.isMac()) {
+			System.setProperty("apple.laf.useScreenMenuBar", "true");
+			System.setProperty("apple.awt.application.name", "BilibiliDown");
+		}
 		// System.getProperties().setProperty("file.encoding", "utf-8");
 		boolean isFFmpegSupported = SysUtil.surportFFmpegOfficially();
 		System.out.println("Java version:" + System.getProperty("java.specification.version"));
@@ -177,15 +179,6 @@ public class FrameMain extends JFrame {
 		try {
 			if (!Global.themeDefault) {
 				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-				Font font = new Font("Dialog", Font.PLAIN, 12);
-				Enumeration<Object> keys = UIManager.getDefaults().keys();
-				while (keys.hasMoreElements()) {
-					Object key = keys.nextElement();
-					Object value = UIManager.get(key);
-					if (value instanceof javax.swing.plaf.FontUIResource) {
-						UIManager.put(key, font);
-					}
-				}
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -198,26 +191,24 @@ public class FrameMain extends JFrame {
 	public void InitUI() {
 
 		this.setTitle("BiliBili Down~~" + Global.version);
-		this.setSize(1200, 745);
-		this.setResizable(false);
+		this.setSize(1200, 760);
+		this.setMinimumSize(new Dimension(960, 680));
+		this.setResizable(true);
 		this.setLocationRelativeTo(null);
-		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		URL iconURL = this.getClass().getResource("/resources/favicon.png");
 		ImageIcon icon = new ImageIcon(iconURL);
 		this.setIconImage(icon.getImage());
 
 		// pane 作为内容容器
-		JPanel pane = new JPanel();
+		JPanel pane = new JPanel(new BorderLayout());
 		pane.setBackground(Color.WHITE);
 		pane.setBorder(BorderFactory.createMatteBorder(1, 1, 1, 1, Color.GRAY));
-		// 添加标题栏
-		titleBar = new MJTitleBar(this, true, true);
-		pane.add(titleBar);
+		this.setJMenuBar(new MJMenuBar(this));
 
 		jTabbedpane = new JTabbedPane();
 		Global.tabs = jTabbedpane;
 		jTabbedpane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-		jTabbedpane.setPreferredSize(new Dimension(1194, 706));
 		// Index Tab
 		Global.index = new TabIndex(jTabbedpane);
 		jTabbedpane.addTab("主页", Global.index);
@@ -231,25 +222,45 @@ public class FrameMain extends JFrame {
 //		jTabbedpane.setTabComponentAt(jTabbedpane.indexOfComponent(tab), label);
 //		jTabbedpane.addTab("设置页", new TabSettings(jTabbedpane));
 		
-		pane.add(jTabbedpane);
+		pane.add(jTabbedpane, BorderLayout.CENTER);
 		this.setContentPane(pane);
 		// 关闭窗口时
 		this.addWindowListener(new WindowAdapter() {
+			@Override
 			public void windowClosing(WindowEvent e) {
-				super.windowClosing(e);
-				CmdUtil.deleteAllInactiveCmdTemp();
+				if (SysTray.isSysTrayInitiated() && Global.closeToSystray) {
+					setExtendedState(JFrame.ICONIFIED);
+					setVisible(false);
+					return;
+				}
+				requestApplicationExit();
+			}
+
+			@Override
+			public void windowIconified(WindowEvent e) {
+				if (SysTray.isSysTrayInitiated() && Global.minimizeToSystray) {
+					setVisible(false);
+				}
 			}
 		});
 //		this.setVisible(true);
 		SysTray.buildSysTray(this, icon.getImage());
 	}
 
-	@Override
-	public void setTitle(String title) {
-		super.setTitle(title);
-		if (titleBar != null) {
-			titleBar.setTitle(title);
+	public void requestApplicationExit() {
+		if (Global.downloadTab != null && Global.downloadTab.activeTask > 0) {
+			Object[] options = { "我要退出", "我再想想" };
+			String message = String.format("当前仍有 %d 个任务在下载/转码，正在转码的文件退出后可能丢失或异常，确定要退出吗？",
+					Global.downloadTab.activeTask);
+			int selected = JOptionPane.showOptionDialog(this, message, "警告", JOptionPane.YES_NO_OPTION,
+					JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+			if (selected != 0) {
+				return;
+			}
 		}
+		CmdUtil.deleteAllInactiveCmdTemp();
+		dispose();
+		System.exit(0);
 	}
 
 }

@@ -1,8 +1,12 @@
 package nicelee.ui.item;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -88,86 +92,61 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		fileName = "timg.gif";
 		totalSize = 0L;
 		currentDown = 0L;
-		initUI(this);
+		initUI();
 	}
 
-	void initUI(DownloadInfoPanel dp) {
-		// this.setOpaque(false);
+	void initUI() {
+		this.setLayout(new GridBagLayout());
 		this.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.setPreferredSize(new Dimension(1100, 120));
+		this.setPreferredSize(new Dimension(900, 120));
 
 		lbFileName = new JLabel("尚未生成");
-		lbFileName.setPreferredSize(new Dimension(600, 45));
 		lbFileName.setBorder(BorderFactory.createLineBorder(Color.red));
-//		lbFileName.addMouseListener(new MouseListener() {
-//			Color lightGreen = new Color(153, 214, 92);
-//			Color lightRed = new Color(255, 71, 10);
-//			Color lightPink = new Color(255, 122, 122);
-//			Color lightOrange = new Color(255, 207, 61);
-//			int cnt = 0;
-//			Color[] colors = {null, lightGreen, lightRed, lightPink, lightOrange};
-//			@Override
-//			public void mouseReleased(MouseEvent e) {
-//			}
-//			@Override
-//			public void mousePressed(MouseEvent e) {
-//				cnt = (cnt + 1)%colors.length;
-//				dp.setBackground(colors[cnt]);
-//			}
-//			@Override
-//			public void mouseExited(MouseEvent e) {
-//			}
-//			@Override
-//			public void mouseEntered(MouseEvent e) {
-//			}
-//			@Override
-//			public void mouseClicked(MouseEvent e) {
-//			}
-//		});
-		this.add(lbFileName);
+		addGridComponent(lbFileName, 0, 0, 1.0, 1);
 
 		btnOpen = new MJButton("打开文件");
-		btnOpen.setPreferredSize(new Dimension(100, 45));
 		btnOpen.addActionListener(this);
-		this.add(btnOpen);
+		addGridComponent(btnOpen, 1, 0, 0.0, 1);
 
 		btnOpenFolder = new MJButton("打开文件夹");
-		btnOpenFolder.setPreferredSize(new Dimension(100, 45));
 		btnOpenFolder.addActionListener(this);
-		this.add(btnOpenFolder);
+		addGridComponent(btnOpenFolder, 2, 0, 0.0, 1);
 
 		btnRemove = new MJButton("删除任务");
-		btnRemove.setPreferredSize(new Dimension(100, 45));
 		btnRemove.addActionListener(this);
-		this.add(btnRemove);
-
-		JLabel blank = new JLabel();
-		blank.setPreferredSize(new Dimension(100, 45));
-		this.add(blank);
+		addGridComponent(btnRemove, 3, 0, 0.0, 1);
 
 		lbavName = new JLabel(avTitle);
 		lbavName.setToolTipText(avTitle);
-		lbavName.setPreferredSize(new Dimension(400, 45));
 		lbavName.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.add(lbavName);
+		addGridComponent(lbavName, 0, 1, 0.45, 1);
 
 		lbCurrentStatus = new JLabel("正在获取下载地址...");
-		lbCurrentStatus.setPreferredSize(new Dimension(350, 45));
 		lbCurrentStatus.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.add(lbCurrentStatus);
+		addGridComponent(lbCurrentStatus, 1, 1, 0.35, 1);
 
 		lbDownFile = new JLabel("准备中...");
-		lbDownFile.setPreferredSize(new Dimension(230, 45));
 		lbDownFile.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.add(lbDownFile);
+		addGridComponent(lbDownFile, 2, 1, 0.20, 1);
 		this.setBackground(new Color(204, 255, 255));
 
 		btnControl = new MJButton("暂停");
-		btnControl.setPreferredSize(new Dimension(100, 45));
 		btnControl.addActionListener(this);
 		btnControl.setVisible(false);
-		this.add(btnControl);
+		addGridComponent(btnControl, 3, 1, 0.0, 1);
 		setPreparing(true);
+	}
+
+	private void addGridComponent(Component component, int gridX, int gridY, double weightX, int gridWidth) {
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridx = gridX;
+		constraints.gridy = gridY;
+		constraints.gridwidth = gridWidth;
+		constraints.weightx = weightX;
+		constraints.weighty = 1.0;
+		constraints.fill = weightX > 0.0 ? GridBagConstraints.BOTH : GridBagConstraints.VERTICAL;
+		constraints.insets = new Insets(4, 4, 4, 4);
+		this.add(component, constraints);
 	}
 
 	@Override

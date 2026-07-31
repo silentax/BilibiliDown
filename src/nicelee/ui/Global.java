@@ -8,7 +8,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 import javax.swing.ImageIcon;
@@ -27,7 +26,7 @@ public class Global {
 	public static String version; // 一般情况下，我们不会设置这个标签，这个用于测试
 	@Config(key = "bilibili.time.syncServer", note = "同步服务器的时间", defaultValue = "false", valids = { "true", "false" })
 	public static boolean syncServerTime;
-	@Config(key = "bilibili.theme", note = "界面主题", defaultValue = "true", eq_true = "default", valids = { "default", "system" })
+	@Config(key = "bilibili.theme", note = "界面主题", defaultValue = "system", eq_true = "default", valids = { "default", "system" })
 	public static boolean themeDefault;
 	@Config(key = "bilibili.button.style", note = "Button样式", defaultValue = "true", eq_true = "design", valids = { "design", "default" })
 	public static boolean btnStyle = true;
@@ -90,13 +89,15 @@ public class Global {
 	public static String savePath = "./download/"; // 下载文件保存路径
 	@Config(key = "bilibili.download.poolSize", note = "下载任务线程池大小", defaultValue = "1")
 	public static int downloadPoolSize;// 下载线程池
+	@Config(key = "bilibili.download.query.poolSize", note = "下载地址查询并发数（1-4，修改后重启生效）", defaultValue = "2")
+	public static int downloadQueryPoolSize;
 	@Config(key = "bilibili.download.period.between.download", note = "每个下载任务完成后的等待时间(ms)", defaultValue = "0", multiply = 1)
 	public static long sleepAfterDownloadComplete;
 	@Config(key = "bilibili.download.period.between.query", note = "每个关于下载的查询任务完成后的等待时间(ms)", defaultValue = "0", multiply = 1)
 	public static long sleepAfterDownloadQuery;
 	public static ExecutorService downLoadThreadPool;// 下载线程池
-	// 查询线程池(同一时间并发不能太多,为了保证任务面板的顺序，采用fixed(1))
-	public static ExecutorService queryThreadPool = Executors.newFixedThreadPool(1);//
+	// 查询线程池使用少量有界并发；任务卡片在提交前创建，因此界面顺序仍按用户操作排列。
+	public static ExecutorService queryThreadPool;
 //	public static ExecutorService ccThreadPool = Executors.newFixedThreadPool(1);// 用于字幕下载
 	public static JTabbedPane tabs; // 下载显示界面
 	public static TabDownload downloadTab; // 下载显示界面
@@ -253,6 +254,10 @@ public class Global {
 		}
 		// 特殊处理
 		downLoadThreadPool = DownloadExecutors.newPriorityFixedThreadPool(downloadPoolSize);
+		downloadQueryPoolSize = DownloadExecutors.normalizeQueryPoolSize(downloadQueryPoolSize);
+		if (queryThreadPool == null || queryThreadPool.isShutdown()) {
+			queryThreadPool = DownloadExecutors.newQueryThreadPool(downloadQueryPoolSize);
+		}
 		String savePath = ResourcesUtil.resolve(Global.savePath);
 		if (savePath.endsWith("\\")) {
 			savePath = savePath.substring(0, savePath.length() - 1) + "/";
