@@ -1,8 +1,9 @@
 package nicelee.ui.item;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Image;
+import java.awt.FlowLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -11,19 +12,17 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.net.URL;
 
 import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.border.EmptyBorder;
 
 import nicelee.bilibili.enums.AudioQualityEnum;
 import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
-import nicelee.bilibili.util.Logger;
 import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
@@ -40,20 +39,28 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 	String avTitle;
 	VideoInfo video;
 	ClipInfo clip;
+	private final TabVideo tabVideo;
 
 	private JLabel labelTitle;
+	private JPanel buttonPanel;
 	private long lastMousePressed;
-	Dimension btnSize = new Dimension(100, 26);
+
 	public ClipInfoPanel(VideoInfo video, ClipInfo clip) {
+		this(video, clip, null);
+	}
+
+	public ClipInfoPanel(VideoInfo video, ClipInfo clip, TabVideo tabVideo) {
 		this.video = video;
 		this.clip = clip;
+		this.tabVideo = tabVideo;
 		this.avTitle = clip.getAvTitle();
 		initUI();
 	}
 
 	void initUI() {
-		this.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.setPreferredSize(new Dimension(340, 170));
+		this.setLayout(new BorderLayout(0, 8));
+		this.setBorder(BorderFactory.createLineBorder(new Color(205, 210, 216)));
+		this.setPreferredSize(new Dimension(280, 170));
 		// 分情况显示
 		boolean isPic = ResourcesUtil.isPicture(clip);
 		if(clip.getListName() != null || isPic) {
@@ -62,17 +69,17 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 			labelTitle = new JLabel(clip.getRemark() + " - " + clip.getTitle(), JLabel.CENTER);
 		}
 		labelTitle.addMouseListener(this);
-		//labelTitle.setBorder(BorderFactory.createLineBorder(Color.red));
-		//labelTitle.setToolTipText("双击复制title文本 + avId，长按查看更换预览图片");
 		labelTitle.setToolTipText(clip.getAvTitle() + clip.getTitle());
-		labelTitle.setPreferredSize(new Dimension(250, 30));
+		labelTitle.setBorder(new EmptyBorder(8, 8, 0, 8));
 		this.setOpaque(false);
-		this.add(labelTitle);
-		
+		this.add(labelTitle, BorderLayout.NORTH);
+
+		buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		buttonPanel.setOpaque(false);
+		this.add(buttonPanel, BorderLayout.CENTER);
+
 		if(!isPic) {
 			JButton btnDanmuku = new MJButton("弹幕");
-			Dimension size = new Dimension(60, 26);
-			btnDanmuku.setPreferredSize(size);
 			btnDanmuku.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -80,7 +87,7 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 					DownloadTaskDispatcher.submit(downThread);
 				}
 			});
-			this.add(btnDanmuku);
+			buttonPanel.add(btnDanmuku);
 		}
 		
 		for (final int qn : clip.getLinks().keySet()) {
@@ -109,7 +116,6 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 	 * @param btn
 	 */
 	private void initQnBtn(final int qn, JButton btn) {
-		btn.setPreferredSize(btnSize);
 		btn.addActionListener(new ActionListener() {
 
 			@Override
@@ -118,17 +124,15 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 				DownloadTaskDispatcher.submit(downThread);
 			}
 		});
-		this.add(btn);
+		buttonPanel.add(btn);
 	}
 
 	@Override
 	public void mouseClicked(MouseEvent e) {
-		String txtToCopy = null;
-		if (e.getClickCount() == 1) {
-			//txtToCopy = clip.getAvTitle() + clip.getTitle();
-		} else {
-			txtToCopy = clip.getAvTitle() + clip.getTitle() + " " +clip.getAvId();
+		if (e.getClickCount() < 2) {
+			return;
 		}
+		String txtToCopy = clip.getAvTitle() + clip.getTitle() + " " +clip.getAvId();
 		// 获取系统剪贴板
 		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 		// 封装文本内容
@@ -145,27 +149,13 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 
 	@Override
 	public void mouseReleased(MouseEvent e) {
-		labelTitle.setBorder(null);
+		labelTitle.setBorder(new EmptyBorder(8, 8, 0, 8));
 		long timeTouched = System.currentTimeMillis() - lastMousePressed;
-		Logger.println("长按了" + timeTouched +"ms");
-		if(timeTouched >= 500) {
-			try {
-				//获取父对象
-				TabVideo tVideo = (TabVideo)this.getParent().getParent().getParent().getParent();
-				//设置更换预览图片
-				String toDisplay = clip.getPicPreview();
-				if(toDisplay != null && !toDisplay.equals(tVideo.getCurrentDisplayPic())) {
-					URL fileURL = new URL(toDisplay);
-					ImageIcon imag1 = new ImageIcon(fileURL);
-					imag1 = new ImageIcon(imag1.getImage().getScaledInstance(700, 460, Image.SCALE_SMOOTH) );
-					tVideo.getLbAvPrivew().setText("");
-					tVideo.getLbAvPrivew().setIcon(imag1);
-					tVideo.setCurrentDisplayPic(toDisplay);
-				}
-			} catch (Exception e1) {
-				e1.printStackTrace();
+		if(timeTouched >= 500 && tabVideo != null) {
+			String toDisplay = clip.getPicPreview();
+			if(toDisplay != null && !toDisplay.equals(tabVideo.getCurrentDisplayPic())) {
+				tabVideo.loadPreviewImageAsync(toDisplay);
 			}
-			
 		}
 	}
 

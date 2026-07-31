@@ -97,7 +97,6 @@ public class MJTabVideo extends TabVideo {// implements MouseListener, ActionLis
 	@Override
 	public void mouseClicked(MouseEvent e) {
 		if (e.getSource() == label) {
-			System.out.println("MJTab label的点击事件");
 			if (e.getButton() == MouseEvent.BUTTON1) {
 				// 鼠标左键双击事件， 删除此tab页
 				if (e.getClickCount() >= 2) {

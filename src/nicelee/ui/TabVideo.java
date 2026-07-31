@@ -1,35 +1,61 @@
 package nicelee.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
+import java.awt.image.BufferedImage;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.concurrent.atomic.AtomicLong;
 
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.border.EmptyBorder;
 
 import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
 import nicelee.ui.item.MJButton;
+import nicelee.ui.util.SwingDispatch;
 import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.DownloadRunnable;
 
 public class TabVideo extends JPanel implements ActionListener, MouseListener {
 
 	private static final long serialVersionUID = -5829023045158490350L;
+	private static final Color PANEL_BORDER_COLOR = new Color(205, 210, 216);
+	private static final int PREVIEW_CONNECT_TIMEOUT_MS = 10000;
+	private static final int PREVIEW_READ_TIMEOUT_MS = 15000;
 	// ImageIcon backgroundIcon = new
 	// ImageIcon(this.getClass().getResource("/resources/background.jpg"));
 
@@ -39,7 +65,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	JLabel lbVideoTitle = new JLabel("Av标题");
 	JLabel lbAvID = new JLabel("AvID");
 	JLabel lbBreif = new JLabel("Av简介");
-	JLabel lbAvPrivew;
+	ScalableImageLabel lbAvPrivew;
 	JPanel jpContent;
 	JScrollPane jpScorll;
 	JComboBox<String> cbQn; // 清晰度
@@ -49,6 +75,10 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	JPanel nextPagePanel;  // 下一页面板
 	JLabel jlNextPageTips; // 下一页文字提示
 	protected JButton btnNextPage; // 下一页
+	private JLabel lbLoadStatus;
+	private JProgressBar loadProgress;
+	private JSplitPane detailSplitPane;
+	private final AtomicLong previewRequestSequence = new AtomicLong();
 	
 
 	public TabVideo(JLabel lbTabTitle) {
@@ -57,142 +87,142 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	}
 
 	public void init() {
-		Dimension size = new Dimension(86, 26);
 		this.setOpaque(false);
-		this.setLayout(new FlowLayout(FlowLayout.LEFT));
-		// 空白模块- 占位
-		JLabel jlBLANK = new JLabel();
-		jlBLANK.setPreferredSize(new Dimension(1150, 50));
-		this.add(jlBLANK);
+		this.setLayout(new BorderLayout(0, 12));
+		this.setBorder(new EmptyBorder(16, 16, 16, 16));
 
-		JLabel jlBLANK0 = new JLabel();
-		jlBLANK0.setPreferredSize(new Dimension(100, 30));
-		this.add(jlBLANK0);
+		JPanel header = new JPanel(new BorderLayout(0, 10));
+		header.setOpaque(false);
+		JPanel metadata = new JPanel(new GridBagLayout());
+		metadata.setOpaque(false);
+		GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridy = 0;
+		constraints.insets = new Insets(0, 0, 6, 8);
+		constraints.fill = GridBagConstraints.HORIZONTAL;
 
-		lbVideoTitle.setBorder(BorderFactory.createLineBorder(Color.red));
-		lbVideoTitle.setPreferredSize(new Dimension(400, 30));
-		lbVideoTitle.setBackground(Color.BLUE);
+		lbVideoTitle.setBorder(createInfoBorder());
 		lbVideoTitle.addMouseListener(this);
-		this.add(lbVideoTitle);
+		constraints.gridx = 0;
+		constraints.weightx = 1.0;
+		metadata.add(lbVideoTitle, constraints);
 
-		// 空白模块- 占位
-		JLabel jpBLANK1 = new JLabel();
-		jpBLANK1.setPreferredSize(new Dimension(30, 30));
-		this.add(jpBLANK1);
-
-		lbAvID.setBorder(BorderFactory.createLineBorder(Color.red));
-		lbAvID.setPreferredSize(new Dimension(100, 30));
+		lbAvID.setBorder(createInfoBorder());
 		lbAvID.addMouseListener(this);
-		this.add(lbAvID);
+		constraints.gridx = 1;
+		constraints.weightx = 0.0;
+		constraints.insets = new Insets(0, 0, 6, 0);
+		metadata.add(lbAvID, constraints);
 
-		// 空白模块- 占位
-		JLabel jlBLANK1 = new JLabel();
-		jlBLANK1.setPreferredSize(new Dimension(40, 30));
-		this.add(jlBLANK1);
+		lbBreif.setBorder(createInfoBorder());
+		lbBreif.addMouseListener(this);
+		constraints.gridx = 0;
+		constraints.gridy = 1;
+		constraints.gridwidth = 2;
+		constraints.weightx = 1.0;
+		constraints.insets = new Insets(0, 0, 0, 0);
+		metadata.add(lbBreif, constraints);
+		header.add(metadata, BorderLayout.CENTER);
 
-		JLabel label1 = new JLabel("优先清晰度");
-		this.add(label1);
-		cbQn = new JComboBox<>();
+		JPanel actionRow = new JPanel(new BorderLayout(12, 0));
+		actionRow.setOpaque(false);
+		JPanel loadingPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+		loadingPanel.setOpaque(false);
+		lbLoadStatus = new JLabel("正在解析作品信息...");
+		loadProgress = new JProgressBar();
+		loadProgress.setIndeterminate(true);
+		loadingPanel.add(loadProgress);
+		loadingPanel.add(lbLoadStatus);
+		actionRow.add(loadingPanel, BorderLayout.CENTER);
+
+		JPanel controls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+		controls.setOpaque(false);
+		controls.add(new JLabel("优先清晰度"));
+		cbQn = new JComboBox<String>();
 		for (VideoQualityEnum item : VideoQualityEnum.values()) {
 			cbQn.addItem(item.getQuality());
 		}
 		cbQn.setSelectedItem(Global.tab_qn);
-		// cbQn.setSelectedIndex(2);
+		controls.add(cbQn);
+
 		btnDownAll = new MJButton("批量下载");
-		btnDownAll.setPreferredSize(size);
 		btnDownAll.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				download(true, VideoQualityEnum.getQN(cbQn.getSelectedItem().toString()));
+				Object selectedQuality = cbQn.getSelectedItem();
+				if (selectedQuality != null) {
+					download(true, VideoQualityEnum.getQN(selectedQuality.toString()));
+				}
 			}
 		});
+		controls.add(btnDownAll);
+
 		btnDownCC = new MJButton("字幕下载");
-		btnDownCC.setPreferredSize(size);
 		btnDownCC.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				downloadCC();
 			}
 		});
-		this.add(cbQn);
-		this.add(btnDownAll);
-		this.add(btnDownCC);
-		// 空白模块- 占位
-		JLabel jlBLANK11 = new JLabel();
-		jlBLANK11.setPreferredSize(new Dimension(90, 30));
-		// jlBLANK11.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.add(jlBLANK11);
+		controls.add(btnDownCC);
 
-		// 空白模块- 占位
-		JLabel jlBLANK2 = new JLabel();
-		jlBLANK2.setPreferredSize(new Dimension(100, 60));
-		// jlBLANK2.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.add(jlBLANK2);
-
-		lbBreif.setBorder(BorderFactory.createLineBorder(Color.red));
-		lbBreif.setPreferredSize(new Dimension(700, 60));
-		lbBreif.addMouseListener(this);
-		this.add(lbBreif);
-
-		// 下一页panel
-		nextPagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-		nextPagePanel.setPreferredSize(new Dimension(350, 60));
+		nextPagePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
 		nextPagePanel.setOpaque(false);
-		this.add(nextPagePanel);
-		// 空白模块- 占位
-		JLabel jlBLANK3 = new JLabel();
-		jlBLANK3.setPreferredSize(new Dimension(50, 60));
-		nextPagePanel.add(jlBLANK3);
-		jlNextPageTips = new JLabel("视频数量不对?试试这个-->");
-		jlNextPageTips.setAlignmentX(50.0f);
-		jlNextPageTips.setPreferredSize(new Dimension(150, 60));
+		jlNextPageTips = new JLabel("视频数量不对？");
 		btnNextPage = new MJButton("下一页");
-		btnNextPage.setPreferredSize(size); // new Dimension(86, 26);
-		
-		// 空白模块- 占位
-		JLabel jlBLANK4 = new JLabel();
-		jlBLANK4.setPreferredSize(new Dimension(100, 460));
-		this.add(jlBLANK4);
+		nextPagePanel.add(jlNextPageTips);
+		nextPagePanel.add(btnNextPage);
+		nextPagePanel.setVisible(false);
+		controls.add(nextPagePanel);
+		actionRow.add(controls, BorderLayout.EAST);
+		header.add(actionRow, BorderLayout.SOUTH);
+		this.add(header, BorderLayout.NORTH);
 
-		// ImageIcon imag1 = new
-		// ImageIcon(this.getClass().getResource("/resources/loading.gif"));
-		// imag1.setImage(imag1.getImage().getScaledInstance(700, 460,
-		// Image.SCALE_DEFAULT));
-		lbAvPrivew = new JLabel("加载中", JLabel.CENTER);
-		lbAvPrivew.setToolTipText("单击获取图片链接");
-		lbAvPrivew.setFont(new Font("黑体", Font.BOLD, 120));
-		lbAvPrivew.setBorder(BorderFactory.createLineBorder(Color.red));
-		lbAvPrivew.setPreferredSize(new Dimension(700, 460));
+		lbAvPrivew = new ScalableImageLabel("正在解析...", SwingConstants.CENTER);
+		lbAvPrivew.setToolTipText("单击复制当前预览图片链接");
+		lbAvPrivew.setFont(lbAvPrivew.getFont().deriveFont(Font.BOLD, 32.0f));
+		lbAvPrivew.setBorder(BorderFactory.createLineBorder(PANEL_BORDER_COLOR));
+		lbAvPrivew.setMinimumSize(new Dimension(300, 260));
 		lbAvPrivew.addMouseListener(this);
-//		try {
-//			ImageIcon imgIcon = new ImageIcon(QrCodeUtil.createQrCode("你好吗?我好呀", 900));
-//			imgIcon = new ImageIcon(imgIcon.getImage().getScaledInstance(450, 450, Image.SCALE_SMOOTH));
-//			lbAvPrivew.setIcon(imgIcon);
-//		} catch (WriterException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		this.add(lbAvPrivew);
 
-		jpContent = new JPanel();
-		jpContent.setPreferredSize(new Dimension(340, 300));
+		jpContent = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
+		jpContent.setBorder(new EmptyBorder(8, 8, 8, 8));
+		jpContent.setPreferredSize(new Dimension(0, 300));
 		jpContent.setOpaque(false);
 
 		jpScorll = new JScrollPane(jpContent);
-		// 分别设置水平和垂直滚动条出现方式
 		jpScorll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		jpScorll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-		jpScorll.setBorder(BorderFactory.createLineBorder(Color.red));
-		jpScorll.setPreferredSize(new Dimension(350, 460));
+		jpScorll.setBorder(BorderFactory.createLineBorder(PANEL_BORDER_COLOR));
+		jpScorll.setMinimumSize(new Dimension(280, 260));
 		jpScorll.setOpaque(false);
 		jpScorll.getViewport().setOpaque(false);
-		this.add(jpScorll);
 
+		detailSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, lbAvPrivew, jpScorll);
+		detailSplitPane.setBorder(null);
+		detailSplitPane.setContinuousLayout(true);
+		detailSplitPane.setOneTouchExpandable(true);
+		detailSplitPane.setResizeWeight(0.65);
+		detailSplitPane.addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(ComponentEvent event) {
+				if (detailSplitPane.getWidth() > 0) {
+					detailSplitPane.setDividerLocation(0.65);
+					detailSplitPane.removeComponentListener(this);
+				}
+			}
+		});
+		this.add(detailSplitPane, BorderLayout.CENTER);
+		setLoading(true);
+	}
+
+	private javax.swing.border.Border createInfoBorder() {
+		return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(PANEL_BORDER_COLOR),
+				new EmptyBorder(5, 8, 5, 8));
 	}
 
 	public void displayNextPagePanel() {
-		nextPagePanel.add(jlNextPageTips);
-		nextPagePanel.add(btnNextPage);
+		nextPagePanel.setVisible(true);
+		nextPagePanel.revalidate();
 	}
 
 	/**
@@ -203,20 +233,141 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		btnDownAll.setEnabled(!loading);
 		btnDownCC.setEnabled(!loading);
 		btnNextPage.setEnabled(!loading);
+		loadProgress.setVisible(loading);
 		if (loading) {
-			lbAvPrivew.setIcon(null);
-			lbAvPrivew.setText("正在解析...");
+			previewRequestSequence.incrementAndGet();
+			showPreviewMessage("正在解析...");
+			lbLoadStatus.setForeground(new Color(25, 90, 160));
+			lbLoadStatus.setText("正在解析作品信息...");
+		} else {
+			lbLoadStatus.setForeground(new Color(40, 110, 55));
+			lbLoadStatus.setText("解析完成");
 		}
 	}
 
-	public void setLoadFailed(String message) {
-		setLoading(false);
+	public void completeLoading(int clipCount) {
+		boolean hasClips = clipCount > 0;
+		loadProgress.setVisible(false);
+		cbQn.setEnabled(hasClips);
+		btnDownAll.setEnabled(hasClips);
+		btnDownCC.setEnabled(hasClips);
+		btnNextPage.setEnabled(true);
+		lbLoadStatus.setForeground(hasClips ? new Color(40, 110, 55) : new Color(145, 95, 20));
+		lbLoadStatus.setText(hasClips ? "解析完成，共 " + clipCount + " 个分集" : "解析完成，未找到可下载分集");
+	}
+
+	public void beginRenderingClips(int clipCount) {
+		loadProgress.setVisible(clipCount > 0);
 		cbQn.setEnabled(false);
 		btnDownAll.setEnabled(false);
 		btnDownCC.setEnabled(false);
 		btnNextPage.setEnabled(false);
+		lbLoadStatus.setForeground(new Color(25, 90, 160));
+		lbLoadStatus.setText(clipCount > 0 ? "正在生成分集列表：0 / " + clipCount : "正在整理作品信息...");
+	}
+
+	public void updateRenderingProgress(int renderedCount, int clipCount) {
+		lbLoadStatus.setText("正在生成分集列表：" + renderedCount + " / " + clipCount);
+	}
+
+	public void setLoadFailed(String message) {
+		previewRequestSequence.incrementAndGet();
+		loadProgress.setVisible(false);
+		cbQn.setEnabled(false);
+		btnDownAll.setEnabled(false);
+		btnDownCC.setEnabled(false);
+		btnNextPage.setEnabled(false);
+		lbLoadStatus.setForeground(new Color(170, 45, 45));
+		lbLoadStatus.setText(message);
+		showPreviewMessage(message);
+	}
+
+	public void loadPreviewImageAsync(final String previewUrl) {
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingDispatch.runLater(new Runnable() {
+				@Override
+				public void run() {
+					loadPreviewImageAsync(previewUrl);
+				}
+			});
+			return;
+		}
+		final long requestId = previewRequestSequence.incrementAndGet();
+		if (previewUrl == null || previewUrl.trim().isEmpty()) {
+			showPreviewMessage("无预览图");
+			return;
+		}
+		showPreviewMessage("正在加载预览图...");
+		Thread previewLoader = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					final ImageIcon image = readPreviewImage(previewUrl);
+					SwingDispatch.runLater(new Runnable() {
+						@Override
+						public void run() {
+							if (previewRequestSequence.get() == requestId) {
+								showPreviewImage(image, previewUrl);
+							}
+						}
+					});
+				} catch (Exception error) {
+					SwingDispatch.runLater(new Runnable() {
+						@Override
+						public void run() {
+							if (previewRequestSequence.get() == requestId) {
+								showPreviewMessage("预览图加载失败");
+							}
+						}
+					});
+				}
+			}
+		}, "Thread-PreviewImage");
+		previewLoader.setDaemon(true);
+		previewLoader.start();
+	}
+
+	private ImageIcon readPreviewImage(String previewUrl) throws Exception {
+		URL url = new URL(previewUrl);
+		String protocol = url.getProtocol();
+		if (!"https".equalsIgnoreCase(protocol) && !"http".equalsIgnoreCase(protocol)) {
+			throw new IllegalArgumentException("预览图仅支持 HTTP/HTTPS 地址");
+		}
+		URLConnection connection = url.openConnection();
+		connection.setConnectTimeout(PREVIEW_CONNECT_TIMEOUT_MS);
+		connection.setReadTimeout(PREVIEW_READ_TIMEOUT_MS);
+		if (Global.userAgent != null && !Global.userAgent.trim().isEmpty()) {
+			connection.setRequestProperty("User-Agent", Global.userAgent);
+		}
+		try (InputStream input = connection.getInputStream()) {
+			BufferedImage image = ImageIO.read(input);
+			if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+				throw new IllegalStateException("预览图内容无效");
+			}
+			return new ImageIcon(image);
+		}
+	}
+
+	private void showPreviewImage(ImageIcon image, String previewUrl) {
+		lbAvPrivew.setSourceImage(image.getImage());
+		lbAvPrivew.setText("");
+		currentDisplayPic = previewUrl;
+	}
+
+	public void showPreviewMessage(final String message) {
+		if (!SwingUtilities.isEventDispatchThread()) {
+			SwingDispatch.runLater(new Runnable() {
+				@Override
+				public void run() {
+					showPreviewMessage(message);
+				}
+			});
+			return;
+		}
+		lbAvPrivew.setSourceImage(null);
 		lbAvPrivew.setIcon(null);
 		lbAvPrivew.setText(message);
+		currentDisplayPic = null;
 	}
 	
 	/**
@@ -226,7 +377,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	 * @param qn
 	 */
 	public void download(boolean downAll, int qn) {
-		if (avInfo == null) {
+		if (avInfo == null || avInfo.getClips() == null) {
 			return;
 		}
 		int total = avInfo.getClips().values().size();
@@ -246,6 +397,9 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	 * 
 	 */
 	public void downloadCC() {
+		if (avInfo == null || avInfo.getClips() == null) {
+			return;
+		}
 		int total = avInfo.getClips().values().size();
 		for (int i = 0; i < total; i++) {
 			download(i, 800);
@@ -315,10 +469,6 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		return lbAvPrivew;
 	}
 
-	public void setLbAvPrivew(JLabel lbAvPrivew) {
-		this.lbAvPrivew = lbAvPrivew;
-	}
-
 	public JScrollPane getJpScorll() {
 		return jpScorll;
 	}
@@ -335,6 +485,22 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		this.jpContent = jpContent;
 	}
 
+	public JSplitPane getDetailSplitPane() {
+		return detailSplitPane;
+	}
+
+	public JLabel getLoadStatusLabel() {
+		return lbLoadStatus;
+	}
+
+	public JProgressBar getLoadProgress() {
+		return loadProgress;
+	}
+
+	public boolean areDownloadActionsEnabled() {
+		return cbQn.isEnabled() && btnDownAll.isEnabled() && btnDownCC.isEnabled();
+	}
+
 	@Override
 	public void mouseClicked(MouseEvent e) {
 		JLabel label = (JLabel) e.getSource();
@@ -342,7 +508,8 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 		String txtToCopy = null;
 		if (label == lbAvPrivew) {
-			txtToCopy = currentDisplayPic != null ? currentDisplayPic : avInfo.getVideoPreview();
+			txtToCopy = currentDisplayPic != null ? currentDisplayPic
+					: avInfo == null ? null : avInfo.getVideoPreview();
 		} else {
 			txtToCopy = label.getText();
 		}
@@ -363,7 +530,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	@Override
 	public void mouseReleased(MouseEvent e) {
 		JLabel label = (JLabel) e.getSource();
-		label.setBorder(BorderFactory.createLineBorder(Color.red));
+		label.setBorder(label == lbAvPrivew ? BorderFactory.createLineBorder(PANEL_BORDER_COLOR) : createInfoBorder());
 
 	}
 
@@ -391,5 +558,48 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 
 	public void setCurrentDisplayPic(String currentDisplayPic) {
 		this.currentDisplayPic = currentDisplayPic;
+	}
+
+	private static final class ScalableImageLabel extends JLabel {
+		private static final long serialVersionUID = 1L;
+		private Image sourceImage;
+
+		private ScalableImageLabel(String text, int horizontalAlignment) {
+			super(text, horizontalAlignment);
+		}
+
+		private void setSourceImage(Image sourceImage) {
+			this.sourceImage = sourceImage;
+			repaint();
+		}
+
+		@Override
+		protected void paintComponent(Graphics graphics) {
+			super.paintComponent(graphics);
+			if (sourceImage == null) {
+				return;
+			}
+			int imageWidth = sourceImage.getWidth(this);
+			int imageHeight = sourceImage.getHeight(this);
+			if (imageWidth <= 0 || imageHeight <= 0) {
+				return;
+			}
+			Insets insets = getInsets();
+			int availableWidth = Math.max(1, getWidth() - insets.left - insets.right);
+			int availableHeight = Math.max(1, getHeight() - insets.top - insets.bottom);
+			double scale = Math.min((double) availableWidth / imageWidth, (double) availableHeight / imageHeight);
+			int targetWidth = Math.max(1, (int) Math.round(imageWidth * scale));
+			int targetHeight = Math.max(1, (int) Math.round(imageHeight * scale));
+			int x = insets.left + (availableWidth - targetWidth) / 2;
+			int y = insets.top + (availableHeight - targetHeight) / 2;
+			Graphics2D imageGraphics = (Graphics2D) graphics.create();
+			try {
+				imageGraphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+						RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+				imageGraphics.drawImage(sourceImage, x, y, targetWidth, targetHeight, this);
+			} finally {
+				imageGraphics.dispose();
+			}
+		}
 	}
 }

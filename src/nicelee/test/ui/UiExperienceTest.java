@@ -3,6 +3,7 @@ package nicelee.test.ui;
 import java.awt.BorderLayout;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.util.HashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -11,10 +12,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 
 import nicelee.bilibili.model.ClipInfo;
+import nicelee.bilibili.model.VideoInfo;
 import nicelee.ui.TabDownload;
+import nicelee.ui.TabVideo;
+import nicelee.ui.item.ClipInfoPanel;
 import nicelee.ui.item.DownloadInfoPanel;
 import nicelee.ui.thread.DownloadExecutors;
 import nicelee.ui.util.DownloadStatusFormatter;
@@ -28,6 +33,7 @@ public class UiExperienceTest {
 		testExceptionPropagation();
 		testPreparingCounterIsThreadSafe();
 		testResponsiveDownloadLayouts();
+		testResponsiveVideoLayoutAndFeedback();
 		testBoundedQueryExecutor();
 		testDownloadProgressFormatting();
 		System.out.println("UI experience regression tests passed");
@@ -126,6 +132,62 @@ public class UiExperienceTest {
 			}
 		});
 		check(panel.getLayout() instanceof GridBagLayout, "download card must distribute horizontal space");
+	}
+
+	private static void testResponsiveVideoLayoutAndFeedback() {
+		final TabVideo tab = SwingDispatch.callAndWait(new Callable<TabVideo>() {
+			@Override
+			public TabVideo call() {
+				return new TabVideo(new javax.swing.JLabel("正在加载"));
+			}
+		});
+		check(tab.getLayout() instanceof BorderLayout, "video tab must resize with BorderLayout");
+		check(tab.getDetailSplitPane().getOrientation() == JSplitPane.HORIZONTAL_SPLIT,
+				"video preview and clip list must use a horizontal split pane");
+		check(tab.getJpContent().getLayout() instanceof GridLayout, "video clips must use a vertical grid");
+		check(tab.getLoadProgress().isVisible(), "video parsing progress must be visible while loading");
+		check(!tab.areDownloadActionsEnabled(), "video download actions must be disabled while loading");
+
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				tab.beginRenderingClips(3);
+				tab.updateRenderingProgress(2, 3);
+			}
+		});
+		check(tab.getLoadStatusLabel().getText().contains("2 / 3"), "clip rendering progress must be explicit");
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				tab.completeLoading(3);
+			}
+		});
+		check(!tab.getLoadProgress().isVisible(), "video progress must stop after parsing");
+		check(tab.areDownloadActionsEnabled(), "video download actions must be enabled after parsing");
+		check(tab.getLoadStatusLabel().getText().contains("3 个分集"), "video result count must be visible");
+
+		ClipInfoPanel clipPanel = SwingDispatch.callAndWait(new Callable<ClipInfoPanel>() {
+			@Override
+			public ClipInfoPanel call() {
+				ClipInfo clip = new ClipInfo();
+				clip.setAvId("BV-layout-test");
+				clip.setAvTitle("作品布局测试");
+				clip.setTitle("长标题分集");
+				clip.setPage(1);
+				clip.setLinks(new HashMap<Integer, String>());
+				return new ClipInfoPanel(new VideoInfo(), clip, tab);
+			}
+		});
+		check(clipPanel.getLayout() instanceof BorderLayout, "clip card must resize with BorderLayout");
+
+		SwingDispatch.runAndWait(new Runnable() {
+			@Override
+			public void run() {
+				tab.setLoadFailed("解析失败测试");
+			}
+		});
+		check(!tab.areDownloadActionsEnabled(), "video download actions must stay disabled after failure");
+		check("解析失败测试".equals(tab.getLoadStatusLabel().getText()), "video failure reason must be visible");
 	}
 
 	private static void testBoundedQueryExecutor() throws Exception {

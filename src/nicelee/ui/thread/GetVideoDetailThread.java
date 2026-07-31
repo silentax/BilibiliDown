@@ -1,14 +1,12 @@
 package nicelee.ui.thread;
 
 import java.awt.Dimension;
-import java.awt.Image;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import javax.swing.ImageIcon;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.model.ClipInfo;
@@ -26,6 +24,7 @@ import nicelee.ui.util.SwingDispatch;
  * 在后台解析作品信息，并仅在 Swing EDT 上提交界面变更。
  */
 public class GetVideoDetailThread extends Thread {
+	private static final int CLIP_RENDER_BATCH_SIZE = 12;
 
 	public interface Listener {
 		void onFinished(boolean success, String message);
@@ -50,27 +49,34 @@ public class GetVideoDetailThread extends Thread {
 	@Override
 	public void run() {
 		try {
-			DetailResult result = loadDetail();
+			final DetailResult result = loadDetail();
 			SwingDispatch.runLater(new Runnable() {
 				@Override
 				public void run() {
-					applyDetail(result);
-					finish(true, "解析完成：" + result.videoInfo.getVideoName());
+					try {
+						applyDetail(result);
+					} catch (RuntimeException error) {
+						handleFailure(error);
+					}
 				}
 			});
 		} catch (Exception error) {
-			error.printStackTrace();
-			final String details = ResourcesUtil.detailsOfException(error);
+			final Exception loadError = error;
 			SwingDispatch.runLater(new Runnable() {
 				@Override
 				public void run() {
-					video.getLbTabTitle().setText("解析失败");
-					video.setLoadFailed("解析失败，请检查输入或网络");
-					finish(false, "解析失败");
+					handleFailure(loadError);
 				}
 			});
-			JOptionPaneManager.alertErrMsgWithNewThread("作品解析失败", details);
 		}
+	}
+
+	private void handleFailure(Exception error) {
+		error.printStackTrace();
+		video.getLbTabTitle().setText("解析失败");
+		video.setLoadFailed("解析失败，请检查输入或网络");
+		finish(false, "解析失败");
+		JOptionPaneManager.alertErrMsgWithNewThread("作品解析失败", ResourcesUtil.detailsOfException(error));
 	}
 
 	private DetailResult loadDetail() throws Exception {
@@ -85,24 +91,14 @@ public class GetVideoDetailThread extends Thread {
 
 		Collection<ClipInfo> clips = avInfo.getClips().values();
 		List<ClipInfo> clipList = new ArrayList<ClipInfo>(clips);
-		String previewUrl = null;
-		ImageIcon previewIcon = null;
-		boolean previewInvalid = false;
-		if (Global.autoDisplayPreviewPic) {
-			previewUrl = clipList.isEmpty() ? avInfo.getVideoPreview() : clipList.get(0).getPicPreview();
-			if (previewUrl != null && !previewUrl.trim().isEmpty()) {
-				try {
-					ImageIcon source = new ImageIcon(new URL(previewUrl));
-					Image scaled = source.getImage().getScaledInstance(700, 460, Image.SCALE_SMOOTH);
-					previewIcon = new ImageIcon(scaled);
-				} catch (Exception e) {
-					previewInvalid = true;
-				}
-			} else {
-				previewInvalid = true;
+		String previewUrl = avInfo.getVideoPreview();
+		if (!clipList.isEmpty()) {
+			String clipPreview = clipList.get(0).getPicPreview();
+			if (clipPreview != null && !clipPreview.trim().isEmpty()) {
+				previewUrl = clipPreview;
 			}
 		}
-		return new DetailResult(avInfo, clipList, pageable, previewUrl, previewIcon, previewInvalid);
+		return new DetailResult(avInfo, clipList, pageable, previewUrl);
 	}
 
 	private void applyDetail(DetailResult result) {
@@ -113,24 +109,20 @@ public class GetVideoDetailThread extends Thread {
 		}
 		video.setAvInfo(avInfo);
 		video.getLbAvID().setText(avInfo.getVideoId());
-		video.setCurrentDisplayPic(result.previewUrl);
 		if (Global.autoDisplayPreviewPic) {
-			if (result.previewIcon != null) {
-				video.getLbAvPrivew().setIcon(result.previewIcon);
-				video.getLbAvPrivew().setText("");
-			} else {
-				video.getLbAvPrivew().setIcon(null);
-				video.getLbAvPrivew().setText(result.previewInvalid ? "无效预览图" : "无预览图");
-			}
+			video.loadPreviewImageAsync(result.previewUrl);
 		} else {
-			video.getLbAvPrivew().setIcon(null);
-			video.getLbAvPrivew().setText("不显示预览");
+			video.showPreviewMessage("已关闭预览图显示");
+		}
+		String videoName = avInfo.getVideoName();
+		if (videoName == null || videoName.trim().isEmpty()) {
+			videoName = avInfo.getVideoId() == null ? "未命名作品" : avInfo.getVideoId();
 		}
 		video.getLbBreif().setText(avInfo.getBrief());
 		video.getLbBreif().setToolTipText(avInfo.getBrief());
-		video.getLbVideoTitle().setText(avInfo.getVideoName());
-		video.getLbVideoTitle().setToolTipText(avInfo.getVideoName());
-		String title = avInfo.getVideoName();
+		video.getLbVideoTitle().setText(videoName);
+		video.getLbVideoTitle().setToolTipText(videoName);
+		String title = videoName;
 		if (title.length() >= 12) {
 			title = title.substring(0, 9) + "...";
 		}
@@ -138,13 +130,39 @@ public class GetVideoDetailThread extends Thread {
 
 		JPanel content = video.getJpContent();
 		content.removeAll();
-		content.setPreferredSize(new Dimension(340, 175 * result.clips.size()));
-		for (ClipInfo clip : result.clips) {
-			content.add(new ClipInfoPanel(avInfo, clip));
-		}
+		content.setPreferredSize(new Dimension(0, 300));
 		content.revalidate();
 		content.repaint();
-		video.setLoading(false);
+		video.beginRenderingClips(result.clips.size());
+		renderClipBatch(result, 0, videoName);
+	}
+
+	private void renderClipBatch(final DetailResult result, int startIndex, final String videoName) {
+		try {
+			JPanel content = video.getJpContent();
+			int endIndex = Math.min(result.clips.size(), startIndex + CLIP_RENDER_BATCH_SIZE);
+			for (int index = startIndex; index < endIndex; index++) {
+				content.add(new ClipInfoPanel(result.videoInfo, result.clips.get(index), video));
+			}
+			content.setPreferredSize(new Dimension(0, Math.max(300, 178 * endIndex)));
+			content.revalidate();
+			content.repaint();
+			if (endIndex < result.clips.size()) {
+				video.updateRenderingProgress(endIndex, result.clips.size());
+				final int nextIndex = endIndex;
+				SwingUtilities.invokeLater(new Runnable() {
+					@Override
+					public void run() {
+						renderClipBatch(result, nextIndex, videoName);
+					}
+				});
+				return;
+			}
+			video.completeLoading(result.clips.size());
+			finish(true, "解析完成：" + videoName);
+		} catch (RuntimeException error) {
+			handleFailure(error);
+		}
 	}
 
 	private void finish(boolean success, String message) {
@@ -158,17 +176,12 @@ public class GetVideoDetailThread extends Thread {
 		private final List<ClipInfo> clips;
 		private final boolean pageable;
 		private final String previewUrl;
-		private final ImageIcon previewIcon;
-		private final boolean previewInvalid;
 
-		private DetailResult(VideoInfo videoInfo, List<ClipInfo> clips, boolean pageable, String previewUrl,
-				ImageIcon previewIcon, boolean previewInvalid) {
+		private DetailResult(VideoInfo videoInfo, List<ClipInfo> clips, boolean pageable, String previewUrl) {
 			this.videoInfo = videoInfo;
 			this.clips = clips;
 			this.pageable = pageable;
 			this.previewUrl = previewUrl;
-			this.previewIcon = previewIcon;
-			this.previewInvalid = previewInvalid;
 		}
 	}
 }
