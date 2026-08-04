@@ -1,6 +1,14 @@
 package nicelee.bilibili.util;
 
+import java.util.regex.Pattern;
+
 public class Logger {
+
+	private static final int MAX_LOG_LENGTH = 1000;
+	private static final Pattern URL_WITH_QUERY = Pattern.compile(
+			"(?i)(https?://[^\\s\\\"'<>?#]+)[?]\\S*");
+	private static final Pattern LOCAL_PATH = Pattern.compile(
+			"(?:(?:/Users|/home|/private|/var/folders)/[^\\s,\\]\\)]+|[A-Za-z]:\\\\Users\\\\[^\\s,\\]\\)]+)");
 
 	final static boolean mute;
 	static {
@@ -10,7 +18,7 @@ public class Logger {
 	public static void print(Object str) {
 		if (mute)
 			return;
-		System.out.print(str);
+		System.out.print(sanitizeForLog(str));
 	}
 
 	public static void println() {
@@ -27,7 +35,7 @@ public class Logger {
 		file = file.substring(0, file.length() - 5);
 		String method = ele.getMethodName();
 		int line = ele.getLineNumber();
-		String preStr = String.format(str, obj);
+		String preStr = sanitizeForLog(String.format(str, obj));
 		String result = String.format("%s-%s/%d : %s", file, method, line, preStr);
 		System.out.println(result);
 	}
@@ -40,7 +48,7 @@ public class Logger {
 		file = file.substring(0, file.length() - 5);
 		String method = ele.getMethodName();
 		int line = ele.getLineNumber();
-		String result = String.format("%s-%s/%d : %s", file, method, line, str);
+		String result = String.format("%s-%s/%d : %s", file, method, line, sanitizeForLog(str));
 		System.out.println(result);
 	}
 
@@ -52,7 +60,25 @@ public class Logger {
 		file = file.substring(0, file.length() - 5);
 		String method = ele.getMethodName();
 		int line = ele.getLineNumber();
-		String result = String.format("%s-%s/%d : %s", file, method, line, obj.toString());
+		String result = String.format("%s-%s/%d : %s", file, method, line, sanitizeForLog(obj));
 		System.out.println(result);
+	}
+
+	/**
+	 * 日志出口的最后一道隐私保护。调用方可以记录阶段和状态，但不能把完整 API
+	 * 响应、签名查询参数或本机绝对路径写入用户可能分享的控制台日志。
+	 */
+	public static String sanitizeForLog(Object value) {
+		String text = String.valueOf(value);
+		String trimmed = text.trim();
+		if ((trimmed.startsWith("{") && trimmed.endsWith("}"))
+				|| (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+			return "<structured-content-omitted>";
+		}
+		String sanitized = URL_WITH_QUERY.matcher(text).replaceAll("$1?<query-redacted>");
+		sanitized = LOCAL_PATH.matcher(sanitized).replaceAll("<local-path>");
+		if (sanitized.length() > MAX_LOG_LENGTH)
+			return sanitized.substring(0, MAX_LOG_LENGTH) + "<truncated>";
+		return sanitized;
 	}
 }

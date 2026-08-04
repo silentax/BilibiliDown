@@ -52,6 +52,23 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+
+    contractTest {
+        java {
+            srcDirs = ['src']
+            include 'nicelee/test/contract/**'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+
+    manualE2e {
+        java {
+            srcDirs = ['manual-e2e/src']
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 configurations {
@@ -59,6 +76,10 @@ configurations {
     securityTestRuntimeOnly.extendsFrom runtimeOnly
     uiExperienceTestImplementation.extendsFrom implementation
     uiExperienceTestRuntimeOnly.extendsFrom runtimeOnly
+    contractTestImplementation.extendsFrom implementation
+    contractTestRuntimeOnly.extendsFrom runtimeOnly
+    manualE2eImplementation.extendsFrom implementation
+    manualE2eRuntimeOnly.extendsFrom runtimeOnly
 }
 
 dependencies {
@@ -139,6 +160,14 @@ tasks.register('repositoryPrivacyTest', JavaExec) {
     mainClass = 'nicelee.test.security.RepositoryPrivacyTest'
 }
 
+tasks.register('loggerPrivacyTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Verifies centralized redaction of structured responses, signed URLs, and local paths.'
+    dependsOn tasks.named('securityTestClasses')
+    classpath = sourceSets.securityTest.runtimeClasspath
+    mainClass = 'nicelee.test.security.LoggerPrivacyTest'
+}
+
 tasks.register('uiExperienceTest', JavaExec) {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = 'Verifies EDT dispatching and download progress formatting.'
@@ -148,11 +177,49 @@ tasks.register('uiExperienceTest', JavaExec) {
     jvmArgs '-Djava.awt.headless=true'
 }
 
+tasks.register('httpContractTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Runs local HTTP and download contract tests without external network access.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'nicelee.test.contract.HttpRequestUtilContractTest'
+    jvmArgs '-Djava.awt.headless=true'
+}
+
+tasks.register('manualE2e', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Manually parses and downloads the first part of a canonical Bilibili video URL.'
+    dependsOn tasks.named('manualE2eClasses')
+    classpath = sourceSets.manualE2e.runtimeClasspath
+    mainClass = 'nicelee.test.e2e.ManualDownloadE2E'
+
+    doFirst {
+        String e2eUrl = providers.gradleProperty('e2eUrl').getOrElse('').trim()
+        String e2eMode = providers.gradleProperty('e2eMode').getOrElse('all').trim()
+        File dataDirectory = providers.gradleProperty('e2eDataDir')
+                .map { file(it) }
+                .getOrElse(temporaryDir)
+        if (e2eUrl.isEmpty()) {
+            throw new GradleException('manualE2e requires -Pe2eUrl=https://www.bilibili.com/video/BV.../')
+        }
+        if (!dataDirectory.exists() && !dataDirectory.mkdirs()) {
+            throw new GradleException('Unable to create the isolated manual E2E data directory')
+        }
+        systemProperty 'e2e.url', e2eUrl
+        systemProperty 'e2e.mode', e2eMode
+        systemProperty 'e2e.dataDir', dataDirectory.absolutePath
+        systemProperty 'bilibili.prop.dataDirPath', dataDirectory.absolutePath
+    }
+
+    jvmArgs '-Djava.awt.headless=true', '-Dfile.encoding=UTF-8'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('securityTest'), tasks.named('tlsSecurityTest'), tasks.named('platformCompatibilityTest'),
             tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
             tasks.named('sourcePluginSecurityTest'), tasks.named('credentialSecurityTest'),
-            tasks.named('repositoryPrivacyTest'), tasks.named('uiExperienceTest')
+            tasks.named('repositoryPrivacyTest'), tasks.named('loggerPrivacyTest'), tasks.named('uiExperienceTest'),
+            tasks.named('httpContractTest')
 }
 
 tasks.named('jar') {

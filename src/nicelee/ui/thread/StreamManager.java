@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
+import nicelee.bilibili.util.Logger;
 import nicelee.ui.Global;
 
 public class StreamManager extends Thread{
@@ -22,10 +23,10 @@ public class StreamManager extends Thread{
         	String line = null;
             while((line = bufferedReader.readLine()) !=null ) {
             	if(Global.debugCmd)
-            		System.out.println(line);
+				Logger.println(line);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+			Logger.println("外部进程日志读取失败: " + e.getClass().getSimpleName());
         }
         process.destroy();
         //System.out.println("转码完毕.");

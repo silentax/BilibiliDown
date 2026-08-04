@@ -16,7 +16,11 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -153,91 +157,96 @@ public class HttpRequestUtil {
 		Boolean result = check(fileName);
 		if(result != null)
 			return result;
-		
+
 		InputStream inn = null;
 		RandomAccessFile raf = null;
+		HttpURLConnection conn = null;
 		try {
 			// 文件下载中先添加.part后缀
 			File fileDownloadPart = new File(fileDownload.getParent(), fileDownload.getName() + ".part");
 			raf = new RandomAccessFile(fileDownloadPart, "rw");
+			HashMap<String, String> requestHeaders = headers == null
+					? new HashMap<String, String>() : new HashMap<String, String>(headers);
 			// 获取下载进度
-			long offset = 0;
-			offset = modifyHeaderMapByDownloaded(headers, raf, fileDownloadPart, offset);
+			long offset = modifyHeaderMapByDownloaded(requestHeaders, raf, fileDownloadPart, 0);
 			// 开始下载
-			String urlNameString = url;
-			HttpURLConnection conn = connect(headers, urlNameString, null);
+			conn = connect(requestHeaders, url, null);
 			conn.connect();
 
-//			if (conn.getResponseCode() == 403) {
-//				Logger.println("403被拒，尝试更换Headers");
-//				conn.disconnect();
-//				headers = HttpHeaders.getBiliAppDownHeaders();
-//				offset = modifyHeaderMapByDownloaded(headers, raf, fileDownloadPart, offset);
-//				conn = connect(headers, urlNameString, null);
-//				conn.connect();
-//			}
-			// 获取所有响应头字段
-			Map<String, List<String>> map = conn.getHeaderFields();
-			// 遍历所有的响应头字段
-//			for (String key : map.keySet()) {
-//				System.out.println(key + "--->" + map.get(key));
-//			}
-			List<String> conLen = map.get("Content-Length");
-			if(conLen == null)
-				conLen = map.get("content-length");
-			System.out.printf("文件大小: %s 字节.\r\n", conLen);
-
-			if(conLen != null)
-				totalFileSize = offset + Long.parseUnsignedLong(conLen.get(0));
-			try {
-				inn = conn.getInputStream();
-			} catch (Exception e) {
-				e.printStackTrace();
-				Logger.println(headers.get("range"));
-				BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"));
-				String temp;
-				while ((temp = reader.readLine()) != null) {
-					System.out.println(temp);
-				}
-				reader.close();
-				throw e;
+			int responseCode = conn.getResponseCode();
+			if (offset > 0 && responseCode != HttpURLConnection.HTTP_PARTIAL) {
+				// 某些 CDN 会忽略 Range 并返回完整文件。继续追加会产生损坏文件，
+				// 因此安全地清空临时文件并重新发起一次完整请求。
+				conn.disconnect();
+				conn = null;
+				raf.setLength(0);
+				raf.seek(0);
+				offset = 0;
+				removeHeaderIgnoreCase(requestHeaders, "range");
+				conn = connect(requestHeaders, url, null);
+				conn.connect();
+				responseCode = conn.getResponseCode();
 			}
+			if (responseCode < 200 || responseCode >= 300)
+				throw new IOException("下载请求返回非成功状态码: " + responseCode);
+
+			long contentLength = conn.getContentLengthLong();
+			totalFileSize = contentLength >= 0 ? offset + contentLength : 0;
+			System.out.printf("文件大小: %s 字节.\r\n",
+					contentLength >= 0 ? Long.toString(totalFileSize) : "未知");
+			inn = conn.getInputStream();
 			if (buffer == null)
 				buffer = new byte[1024 * 1024];
-			int lenRead = inn.read(buffer);
-			downloadedFileSize = offset + lenRead;
-			while (lenRead > -1) {
+			downloadedFileSize = offset;
+			int lenRead;
+			while ((lenRead = inn.read(buffer)) != -1) {
 				if (!bDown) {
 					status = StatusEnum.STOP;
 					return false;
 				}
+				if (lenRead == 0)
+					continue;
 				raf.write(buffer, 0, lenRead);
-				// System.out.println("当前完成度: " + cnt*100/total + "%");
-				lenRead = inn.read(buffer);
 				downloadedFileSize += lenRead;
 			}
+			ResourcesUtil.closeQuietly(inn);
+			inn = null;
 			raf.close();
-			if (fileDownloadPart.length() < totalFileSize) {
-				download(urlNameString, fileName, headers);
-			} else {
-				fileDownloadPart.renameTo(fileDownload);
-				System.out.println("下载完毕...");
-			}
+			raf = null;
+			if (totalFileSize > 0 && fileDownloadPart.length() != totalFileSize)
+				throw new IOException("下载文件长度与响应声明不一致");
+			moveCompletedDownload(fileDownloadPart, fileDownload);
+			System.out.println("下载完毕...");
 		} catch (Exception e) {
-			System.out.println("发送GET请求出现异常！" + e);
-			e.printStackTrace();
+			System.err.println("文件下载失败: " + e.getClass().getSimpleName());
 			status = StatusEnum.FAIL;
 			return false;
 		}
 		// 使用finally块来关闭输入流
 		finally {
 			buffer = null;
-			// System.out.println("下载Finally...");
 			ResourcesUtil.closeQuietly(inn);
 			ResourcesUtil.closeQuietly(raf);
+			if (conn != null)
+				conn.disconnect();
 		}
 		status = StatusEnum.SUCCESS;
 		return true;
+	}
+
+	private static void removeHeaderIgnoreCase(HashMap<String, String> headers, String name) {
+		for (Iterator<String> iterator = headers.keySet().iterator(); iterator.hasNext();) {
+			if (name.equalsIgnoreCase(iterator.next()))
+				iterator.remove();
+		}
+	}
+
+	private static void moveCompletedDownload(File source, File destination) throws IOException {
+		try {
+			Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE);
+		} catch (AtomicMoveNotSupportedException e) {
+			Files.move(source.toPath(), destination.toPath());
+		}
 	}
 
 	/**
@@ -340,8 +349,7 @@ public class HttpRequestUtil {
 		} catch (Status412Exception e) {
 			throw e;
 		} catch (Exception e) {
-			System.out.println("发送GET请求出现异常！" + e);
-			e.printStackTrace();
+			Logger.println("GET 请求失败: " + e.getClass().getSimpleName());
 		} finally {
 			ResourcesUtil.closeQuietly(in);
 		}
@@ -400,7 +408,7 @@ public class HttpRequestUtil {
 		} catch (Status412Exception e) {
 			throw e;
 		} catch (Exception e) {
-			System.out.println("发送POST请求出现异常！" + e);
+			Logger.println("POST 请求失败: " + e.getClass().getSimpleName());
 		} finally {
 			ResourcesUtil.closeQuietly(in);
 		}
@@ -424,7 +432,7 @@ public class HttpRequestUtil {
 			conn.connect();
 			return conn.getResponseCode() != 404;
 		} catch (Exception e) {
-			System.out.println("发送GET请求出现异常！" + e);
+			Logger.println("链接检查失败: " + e.getClass().getSimpleName());
 			return false;
 		} finally {
 			ResourcesUtil.closeQuietly(in);
@@ -434,10 +442,14 @@ public class HttpRequestUtil {
 	protected File getFile(String dst) {
 		File folder = new File(savePath);
 		if (!folder.exists()) {
-			folder.mkdirs();
+			if (!folder.mkdirs() && !folder.isDirectory())
+				throw new IllegalStateException("无法创建下载目录");
 		}
-		File file = new File(folder, dst);
-		return file;
+		try {
+			return ResourcesUtil.resolveUnderDirectory(folder, dst);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("下载文件名超出保存目录", e);
+		}
 	}
 
 	public File getFileDownload() {

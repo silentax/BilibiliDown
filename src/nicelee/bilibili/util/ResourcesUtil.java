@@ -28,13 +28,12 @@ public class ResourcesUtil {
 		String tmpdataDirPath = System.getProperty("bilibili.prop.dataDirPath");
 		try {
 			if (tmpdataDirPath != null) {
-				Logger.println(tmpdataDirPath);
 				File tmpFileDir = new File(tmpdataDirPath);
 				tmpdataDirPath = tmpFileDir.getCanonicalPath();
 				if (tmpFileDir.exists()) {
-					Logger.println("指定数据目录：" + tmpdataDirPath);
+					Logger.println("已启用指定数据目录");
 				} else {
-					Logger.println("目录不存在：" + tmpdataDirPath);
+					Logger.println("指定数据目录不存在，将使用默认目录");
 					tmpdataDirPath = null;
 				}
 			}
@@ -52,7 +51,6 @@ public class ResourcesUtil {
 			if (cmd.endsWith(".jar")) {
 				sb.append(cmd);
 				String jarPath = sb.toString();
-				Logger.println(jarPath);
 				if (new File(jarPath).exists()) {
 					tmpIsJarLaunch = true;
 				}

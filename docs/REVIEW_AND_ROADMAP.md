@@ -366,3 +366,46 @@ bash package.sh
 ```
 
 仍需人工验收：真实 Windows/macOS 下设置页窄窗口、长中文说明、超长目录、系统字体缩放、文件/目录选择器、只读配置目录保存失败，以及关闭未保存页面的确认交互均为 `NOT VERIFIED`。设置保存后依旧遵循现有语义：部分运行时配置需要重启应用才会生效。
+
+## 20. 下载协议契约与运行日志隐私里程碑
+
+截至 2026-08-04，默认单线程下载主链增加不依赖外部网络的 loopback HTTP 契约测试，并修复隔离 GUI 验收发现的本机路径日志：
+
+- 新增 `httpContractTest` 并纳入 Gradle `check`，使用本地 Mock HTTP 服务覆盖 GET、POST、HTTP 412、首次下载、标准 Range 续传、服务器忽略 Range、响应截断和下载路径逃逸。
+- 断点文件存在但服务器返回完整响应时，不再把完整文件追加到 `.part` 后造成静默损坏；当前会清空临时文件并重新发起一次无 Range 的完整请求。
+- 下载只接受 2xx 响应；响应声明长度与实际文件长度不一致时保留 `.part` 并返回失败，不再递归重试或发布不完整成品。
+- 完成文件优先使用原子移动；文件名通过 canonical path containment 校验，拒绝写出保存目录。
+- 下载失败日志不再输出完整异常栈、请求 Range 或服务端错误正文，降低签名 URL、响应内容和本机路径进入共享日志的风险。
+- 应用启动不再输出完整 JAR 路径或用户指定数据目录路径，`RepositoryPrivacyTest` 增加对应防回退检查。
+
+自动验收命令：
+
+```bash
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 httpContractTest repositoryPrivacyTest
+./gradlew --no-daemon --offline -PjavaToolchainVersion=8 clean check
+```
+
+本地契约与隐私专项测试已通过。真实 B站 CDN、下载暂停/恢复、ffmpeg 合并和登录态下载仍需使用公开测试资源人工验收；默认关闭的实验性多线程下载实现 `HttpRequestUtilEx` 尚未纳入本轮契约测试，应在重新启用前单独治理其 Range 校验、线程等待、取消和分片合并边界。
+
+## 21. JDK 21 与真实下载验收里程碑
+
+截至 2026-08-04，macOS arm64 本机已安装 Homebrew OpenJDK 21.0.12，并完成自动检查、视频下载和仅音频下载验收；系统默认 Java 仍保持原 Java 8，未修改 shell 配置：
+
+- JDK 21 下 `clean check jar` 全部通过，打包 JAR 的 headless smoke test 输出 `aarch64 / Java 21 / v6.41`。
+- 第一条公开视频完成 GUI 主链验收：成功解析并下载视频/音频 M4S，ffmpeg 合并和最终重命名成功；`ffprobe` 确认为约 298 秒、44.4 MB 的 1080p HEVC + AAC 文件。
+- 新增默认不接入 `check` 的 `manualE2e` 任务。任务要求显式传入无 query/fragment 的 canonical URL，使用隔离数据目录，只处理第一个分 P，并支持 `all`、`video`、`audio` 三种模式；不会保存 URL、自动点赞、播放提示音或写入下载历史。
+- 第二条公开视频在 `audio` 模式完成两次真实网络验收，ffmpeg 转封装成功；最终文件为 AAC、44.1 kHz、双声道，时长约 229.37 秒，大小约 4.60 MB。
+- 首次真实验收发现完整 API 响应、签名 URL、设备字段和本机 ffmpeg 路径可能进入控制台。日志出口现统一省略结构化响应、查询参数和本机绝对路径，并限制超长日志；外部进程输出也统一经过该出口。
+- 第二次音频验收进一步发现查询参数内嵌 JSON 引号会让旧脱敏规则提前终止。当前规则会清除 URL 从 `?` 到空白边界的全部内容，WBI 签名材料也只记录刷新阶段；新增回归用例防止设备字段和签名值再次残留。
+
+手动仅音频复验命令：
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  ./gradlew --no-daemon --offline manualE2e \
+  -Pe2eUrl=https://www.bilibili.com/video/BV.../ \
+  -Pe2eMode=audio \
+  -Pe2eDataDir=/path/to/an/isolated-directory
+```
+
+剩余真实验收：Windows JDK 21 GUI、登录态/会员资源、暂停与继续、失败重试、批量多分 P、系统凭据存储、DMG/MSI 签名安装包仍为 `NOT VERIFIED`。JDK 21 编译还会报告 `HttpRequestUtilEx` 对 `Long downloadedFileSize` 加锁的 3 条告警；该实验性多线程路径默认关闭，应作为独立并发安全专项处理，不在本次默认 M4S 下载验收中扩大重构。

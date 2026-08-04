@@ -122,13 +122,11 @@ public class API {
 					String wbiImgUrl = obj.getString("img_url");
 					int is = wbiImgUrl.lastIndexOf("/");
 					int ie = wbiImgUrl.indexOf(".", is);
-					Logger.println(wbiImgUrl);
 					String wbiSubUrl = obj.getString("sub_url");
 					int ss = wbiSubUrl.lastIndexOf("/");
 					int se = wbiSubUrl.indexOf(".", ss);
-					Logger.println(wbiSubUrl);
 					wbiImg = wbiImgUrl.substring(is + 1, ie) + wbiSubUrl.substring(ss + 1, se);
-					Logger.println(wbiImg);
+					Logger.println("WBI 签名材料已刷新");
 				}
 			}
 		}

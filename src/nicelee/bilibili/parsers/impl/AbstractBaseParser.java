@@ -131,7 +131,7 @@ public abstract class AbstractBaseParser implements IInputParser {
 			LinkedHashMap<Long, ClipInfo> clipMap = storyList2Map(bvId, videoFormat, getVideoLink, viInfo,
 					story_list);
 			viInfo.setClips(clipMap);
-			viInfo.print();
+			Logger.printf("作品信息解析完成，分 P 数量: %d", clipMap.size());
 			return viInfo;
 		} else {
 			LinkedHashMap<Long, ClipInfo> clipMap = new LinkedHashMap<Long, ClipInfo>();
@@ -174,7 +174,7 @@ public abstract class AbstractBaseParser implements IInputParser {
 			}
 			viInfo.setClips(clipMap);
 		}
-		viInfo.print();
+		Logger.printf("作品信息解析完成，分 P 数量: %d", viInfo.getClips().size());
 		return viInfo;
 	}
 
@@ -621,7 +621,6 @@ public abstract class AbstractBaseParser implements IInputParser {
 				link.append(obj.getString("url"));
 				link.append("#");
 			}
-			System.out.println(link.substring(0, link.length() - 1));
 			return link.substring(0, link.length() - 1);
 		}
 	}

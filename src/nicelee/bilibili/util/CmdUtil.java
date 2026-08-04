@@ -10,7 +10,6 @@ import java.io.OutputStreamWriter;
 import java.lang.ProcessBuilder.Redirect;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -290,8 +289,7 @@ public class CmdUtil {
 				cmd[i] = replParams(cmd[i], videoName, audioName, dstName);
 			}
 		}
-		String str = String.format("ffmpeg命令为: %s", Arrays.toString(cmd));
-		Logger.println(str);
+		Logger.println("ffmpeg 命令已准备");
 		return cmd;
 	}
 

@@ -149,6 +149,14 @@ public class RepositoryPrivacyTest {
 		assertSourceAbsent("src/nicelee/ui/Global.java", "System.out.println(\"savePath: \" + savePath)");
 		assertSourceAbsent("src/nicelee/bilibili/util/ConfigUtil.java", "lockFile.getCanonicalPath()");
 		assertSourceAbsent("src/nicelee/bilibili/util/net/HostSetUtil.java", "configFile.getCanonicalPath()");
+		assertSourceAbsent("src/nicelee/bilibili/util/ResourcesUtil.java", "Logger.println(tmpdataDirPath)");
+		assertSourceAbsent("src/nicelee/bilibili/util/ResourcesUtil.java", "Logger.println(\"指定数据目录：\" + tmpdataDirPath)");
+		assertSourceAbsent("src/nicelee/bilibili/util/ResourcesUtil.java", "Logger.println(\"目录不存在：\" + tmpdataDirPath)");
+		assertSourceAbsent("src/nicelee/bilibili/util/ResourcesUtil.java", "Logger.println(jarPath)");
+		assertSourceAbsent("src/nicelee/bilibili/API.java", "Logger.println(wbiImgUrl)");
+		assertSourceAbsent("src/nicelee/bilibili/API.java", "Logger.println(wbiSubUrl)");
+		assertSourceAbsent("src/nicelee/bilibili/API.java", "Logger.println(wbiImg)");
+		assertSourceAbsent("src/nicelee/bilibili/parsers/impl/AbstractBaseParser.java", "viInfo.print()");
 	}
 
 	private static void assertSourceAbsent(String file, String forbidden) throws Exception {
