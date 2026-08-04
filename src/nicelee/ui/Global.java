@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.regex.Pattern;
 
 import javax.swing.ImageIcon;
@@ -62,6 +63,9 @@ public class Global {
 	public static int maxFailRetry;
 	@Config(key = "bilibili.download.retry.reloadDownloadUrl", note = "重试时，重新查询下载链接", defaultValue = "false", valids = { "true", "false" })
 	public static boolean reloadDownloadUrl;
+	@Config(key = "bilibili.download.retry.delaySeconds", note = "自动重试前等待时间(s)", defaultValue = "3",
+			multiply = 1000, warning = false)
+	public static long downloadRetryDelay;
 	@Config(key = "bilibili.download.urlValidPeriod", note = "下载url的有效时长(min)", defaultValue = "90", multiply = 60000)
 	public static long urlValidPeriod;
 	@Config(key = "bilibili.format", defaultValue = "0", valids = { "0", "1", "2" }, note = "优先下载格式, 0-m4s,1-flv,2-mp4")
@@ -96,6 +100,7 @@ public class Global {
 	@Config(key = "bilibili.download.period.between.query", note = "每个关于下载的查询任务完成后的等待时间(ms)", defaultValue = "0", multiply = 1)
 	public static long sleepAfterDownloadQuery;
 	public static ExecutorService downLoadThreadPool;// 下载线程池
+	public static ScheduledExecutorService downloadRetryScheduler;
 	// 查询线程池使用少量有界并发；任务卡片在提交前创建，因此界面顺序仍按用户操作排列。
 	public static ExecutorService queryThreadPool;
 //	public static ExecutorService ccThreadPool = Executors.newFixedThreadPool(1);// 用于字幕下载
@@ -252,6 +257,9 @@ public class Global {
 		}
 		// 特殊处理
 		downLoadThreadPool = DownloadExecutors.newPriorityFixedThreadPool(downloadPoolSize);
+		if (downloadRetryScheduler == null || downloadRetryScheduler.isShutdown()) {
+			downloadRetryScheduler = DownloadExecutors.newRetryScheduler();
+		}
 		downloadQueryPoolSize = DownloadExecutors.normalizeQueryPoolSize(downloadQueryPoolSize);
 		if (queryThreadPool == null || queryThreadPool.isShutdown()) {
 			queryThreadPool = DownloadExecutors.newQueryThreadPool(downloadQueryPoolSize);

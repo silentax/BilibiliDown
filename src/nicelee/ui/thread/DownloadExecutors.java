@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -23,14 +25,14 @@ public class DownloadExecutors {
 				// o1.urlTimestamp 越小优先级更高
 				if (o1.invokeByContinueTask == o2.invokeByContinueTask) {
 					if (o1.failCnt == o2.failCnt) {
-						return (int) (o1.urlTimestamp - o2.urlTimestamp);
+						return Long.compare(o1.urlTimestamp, o2.urlTimestamp);
 					} else {
 						// 走到这个分支不可能有“开始下载”的任务,failCnt == 0表示人为重新开始任务
-						if(o1.failCnt == 0)
+						if (o1.failCnt == 0)
 							return -1;
-						if(o2.failCnt == 0)
-							return -1;
-						return o2.failCnt - o1.failCnt;
+						if (o2.failCnt == 0)
+							return 1;
+						return Integer.compare(o2.failCnt, o1.failCnt);
 					}
 				} else {
 					return o1.invokeByContinueTask ? -1 : 1;
@@ -73,5 +75,20 @@ public class DownloadExecutors {
 		return new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
 				new LinkedBlockingQueue<Runnable>(MAX_QUEUED_QUERIES), threadFactory,
 				new ThreadPoolExecutor.AbortPolicy());
+	}
+
+	/** 自动重试使用单独的 daemon 调度器，不占用实际下载线程。 */
+	public static ScheduledExecutorService newRetryScheduler() {
+		ThreadFactory threadFactory = new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable runnable) {
+				Thread thread = new Thread(runnable, "Thread-DownloadRetryScheduler");
+				thread.setDaemon(true);
+				return thread;
+			}
+		};
+		ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, threadFactory);
+		executor.setRemoveOnCancelPolicy(true);
+		return executor;
 	}
 }

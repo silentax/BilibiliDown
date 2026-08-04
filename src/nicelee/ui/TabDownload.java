@@ -45,17 +45,20 @@ public class TabDownload extends JPanel implements ActionListener {
 	private volatile int lastPauseTask;
 	private volatile int lastDoneTask;
 	private volatile int lastQueuingTask;
+	private volatile int lastRetryingTask;
 	public TabDownload() {
 		initUI();
 	}
 
 	public volatile int activeTask;
-	public void refreshStatus(int totalTask, int activeTask, int pauseTask, int doneTask, int queuingTask) {
+	public void refreshStatus(int totalTask, int activeTask, int pauseTask, int doneTask, int queuingTask,
+			int retryingTask) {
 		lastTotalTask = totalTask;
 		lastActiveTask = activeTask;
 		lastPauseTask = pauseTask;
 		lastDoneTask = doneTask;
 		lastQueuingTask = queuingTask;
+		lastRetryingTask = retryingTask;
 		requestStatusRefresh();
 	}
 
@@ -80,9 +83,9 @@ public class TabDownload extends JPanel implements ActionListener {
 				int preparing = preparingTaskCount.get();
 				activeTask = lastActiveTask;
 				String txt = String.format(
-						" 总计: %d / 准备: %d / 下载中: %d / 暂停: %d / 完成: %d / 队列: %d",
-						lastTotalTask + preparing, preparing, lastActiveTask, lastPauseTask, lastDoneTask,
-						lastQueuingTask);
+						" 总计: %d / 准备: %d / 下载中: %d / 重试: %d / 暂停: %d / 完成: %d / 队列: %d",
+						lastTotalTask + preparing, preparing, lastActiveTask, lastRetryingTask, lastPauseTask,
+						lastDoneTask, lastQueuingTask);
 				if (lbStatus != null && !txt.equals(lbStatus.getText())) {
 					lbStatus.setText(txt);
 				}
@@ -205,7 +208,6 @@ public class TabDownload extends JPanel implements ActionListener {
 					try {
 						for (DownloadInfoPanel panel : Global.downloadTaskList.keySet()) {
 							try {
-								panel.setFailCnt(0);
 								panel.continueTask();
 							} catch (RuntimeException error) {
 								Logger.println("继续下载任务失败: " + error.getClass().getSimpleName());

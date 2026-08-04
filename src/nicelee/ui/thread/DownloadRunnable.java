@@ -1,7 +1,6 @@
 package nicelee.ui.thread;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.RejectedExecutionException;
 
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.downloaders.IDownloader;
@@ -83,12 +82,13 @@ public class DownloadRunnable implements Runnable {
 		try {
 			download();
 		} catch (BilibiliError e) {
-			JOptionPaneManager.alertErrMsgWithNewThread("发生了预料之外的错误", ResourcesUtil.detailsOfException(e));
-			BatchDownloadRbyRThread.taskFail(clip, ResourcesUtil.detailsOfException(e));
+			String errorType = safeErrorType(e);
+			JOptionPaneManager.alertErrMsgWithNewThread("下载地址获取失败", failureAdvice(errorType));
+			BatchDownloadRbyRThread.taskFail(clip, errorType);
 		} catch (Exception e) {
-			e.printStackTrace();
-			BatchDownloadRbyRThread.taskFail(clip, ResourcesUtil.detailsOfException(e));
-			JOptionPaneManager.alertErrMsgWithNewThread("下载地址获取失败", ResourcesUtil.detailsOfException(e));
+			String errorType = safeErrorType(e);
+			BatchDownloadRbyRThread.taskFail(clip, errorType);
+			JOptionPaneManager.alertErrMsgWithNewThread("下载地址获取失败", failureAdvice(errorType));
 		} finally {
 			cancelPreparation();
 		}
@@ -157,15 +157,17 @@ public class DownloadRunnable implements Runnable {
 		});
 		BatchDownloadRbyRThread.taskFail(clip, "just put in download panel");
 
-		try {
-			if (Global.downLoadThreadPool.isShutdown()) {
-				throw new RejectedExecutionException("下载队列已停止");
-			}
-			Global.downLoadThreadPool.execute(new DownloadRunnableInternal(panel, System.currentTimeMillis(), false, 0));
-		} catch (RejectedExecutionException e) {
-			Global.downloadTaskList.remove(panel);
-			promotedToDownloadTask = false;
-			throw new IllegalStateException("下载队列暂不可用，请稍后重试", e);
+		if (!panel.submitInitialTask(System.currentTimeMillis())) {
+			BatchDownloadRbyRThread.taskFail(clip, "QueueUnavailable");
 		}
+	}
+
+	private static String safeErrorType(Throwable error) {
+		String type = error == null ? null : error.getClass().getSimpleName();
+		return type == null || !type.matches("[A-Za-z0-9_.-]{1,64}") ? "DownloadPreparationFailed" : type;
+	}
+
+	private static String failureAdvice(String errorType) {
+		return "错误类型: " + errorType + "\n建议检查网络、登录状态和资源可用性后重试。";
 	}
 }

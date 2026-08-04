@@ -11,6 +11,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,6 +27,8 @@ import nicelee.ui.TabSettings;
 import nicelee.ui.TabVideo;
 import nicelee.ui.item.ClipInfoPanel;
 import nicelee.ui.item.DownloadInfoPanel;
+import nicelee.ui.task.DownloadTaskLifecycle;
+import nicelee.ui.task.DownloadTaskState;
 import nicelee.ui.thread.DownloadExecutors;
 import nicelee.ui.util.DownloadStatusFormatter;
 import nicelee.ui.util.SwingDispatch;
@@ -41,6 +44,9 @@ public class UiExperienceTest {
 		testResponsiveVideoLayoutAndFeedback();
 		testResponsiveSettingsLayoutAndAsyncSave();
 		testBoundedQueryExecutor();
+		testDownloadTaskLifecycle();
+		testPauseCancelAndQueueRejection();
+		testRetrySchedulerAndStateWiring();
 		testDownloadProgressFormatting();
 		System.out.println("UI experience regression tests passed");
 	}
@@ -274,6 +280,125 @@ public class UiExperienceTest {
 		long fiveGigabytes = 5L * 1024L * 1024L * 1024L;
 		check(DownloadStatusFormatter.bytesPerSecond(fiveGigabytes, 1000L) == fiveGigabytes,
 				"speed calculation must not truncate values above 2 GB");
+	}
+
+	private static void testDownloadTaskLifecycle() {
+		DownloadTaskLifecycle lifecycle = new DownloadTaskLifecycle();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.PREPARING,
+				"new tasks must start in PREPARING");
+		lifecycle.markQueued();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.QUEUED,
+				"prepared tasks must enter QUEUED");
+
+		long firstSubmission = lifecycle.claimInitialSubmission();
+		check(firstSubmission != DownloadTaskLifecycle.NO_TOKEN, "initial submission must be claimable once");
+		check(lifecycle.claimInitialSubmission() == DownloadTaskLifecycle.NO_TOKEN,
+				"initial submission must reject duplicates");
+		check(lifecycle.beginExecution(firstSubmission), "claimed initial submission must start");
+		check(lifecycle.markDownloading(firstSubmission), "running task must enter DOWNLOADING");
+
+		DownloadTaskLifecycle.RetrySchedule retry = lifecycle.markFailed(firstSubmission, 2, 100L, 3000L,
+				"IOException");
+		check(retry.shouldRetry(), "first failure must schedule an automatic retry");
+		check(retry.getRetryCount() == 1, "retry count must be explicit");
+		check(retry.getRetryAtMillis() == 3100L, "retry deadline must include configured delay");
+		check(lifecycle.snapshot().getState() == DownloadTaskState.RETRYING,
+				"retry delay must remain visible as RETRYING");
+		check("IOException".equals(lifecycle.snapshot().getFailureType()),
+				"failure display must retain only the error type");
+		check(lifecycle.claimScheduledRetry(retry.getToken(), 3099L) == DownloadTaskLifecycle.NO_TOKEN,
+				"scheduled retry must not run before its deadline");
+
+		long retrySubmission = lifecycle.claimScheduledRetry(retry.getToken(), 3100L);
+		check(retrySubmission != DownloadTaskLifecycle.NO_TOKEN, "scheduled retry must become claimable at deadline");
+		check(lifecycle.snapshot().getState() == DownloadTaskState.QUEUED,
+				"retry must return to QUEUED after the delay expires");
+		check(lifecycle.claimScheduledRetry(retry.getToken(), 3100L) == DownloadTaskLifecycle.NO_TOKEN,
+				"scheduled retry token must be single use");
+		check(lifecycle.beginExecution(retrySubmission), "claimed retry must start");
+		check(lifecycle.markDownloading(retrySubmission), "retry must return to DOWNLOADING");
+		lifecycle.markMerging();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.MERGING,
+				"conversion must be visible as MERGING");
+		check(lifecycle.markSucceeded(retrySubmission), "active retry must be able to succeed");
+		check(lifecycle.snapshot().getState() == DownloadTaskState.SUCCEEDED,
+				"successful task must become terminal");
+		lifecycle.pause();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.SUCCEEDED,
+				"completed tasks must not be paused");
+	}
+
+	private static void testPauseCancelAndQueueRejection() {
+		DownloadTaskLifecycle lifecycle = new DownloadTaskLifecycle();
+		lifecycle.markQueued();
+		long staleSubmission = lifecycle.claimInitialSubmission();
+		lifecycle.pause();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.PAUSED,
+				"pause must be visible while a task is queued");
+		check(!lifecycle.beginExecution(staleSubmission), "pause must invalidate queued work");
+
+		long manualSubmission = lifecycle.claimManualRetry();
+		check(manualSubmission != DownloadTaskLifecycle.NO_TOKEN, "paused task must allow manual continuation");
+		check(lifecycle.claimManualRetry() == DownloadTaskLifecycle.NO_TOKEN,
+				"concurrent manual continuation must not submit twice");
+		check(lifecycle.beginExecution(manualSubmission), "manual continuation must start");
+		lifecycle.cancel();
+		check(lifecycle.snapshot().getState() == DownloadTaskState.CANCELLED,
+				"removed task must become CANCELLED");
+		check(!lifecycle.markDownloading(manualSubmission), "cancel must invalidate an active submission");
+
+		DownloadTaskLifecycle rejected = new DownloadTaskLifecycle();
+		rejected.markQueued();
+		long rejectedToken = rejected.claimInitialSubmission();
+		rejected.markSubmissionRejected(rejectedToken);
+		check(rejected.snapshot().getState() == DownloadTaskState.FAILED,
+				"download queue rejection must become visible failure");
+		check("QueueUnavailable".equals(rejected.snapshot().getFailureType()),
+				"queue rejection must expose a safe error type");
+
+		DownloadTaskLifecycle exhausted = new DownloadTaskLifecycle();
+		exhausted.markQueued();
+		long exhaustedToken = exhausted.claimInitialSubmission();
+		exhausted.beginExecution(exhaustedToken);
+		exhausted.markDownloading(exhaustedToken);
+		DownloadTaskLifecycle.RetrySchedule none = exhausted.markFailed(exhaustedToken, 0, 0L, 0L,
+				"https://example.invalid/path?credential=placeholder");
+		check(!none.shouldRetry(), "zero retry limit must fail immediately");
+		check(exhausted.snapshot().getState() == DownloadTaskState.FAILED,
+				"exhausted retries must become FAILED");
+		check("DownloadFailed".equals(exhausted.snapshot().getFailureType()),
+				"failure metadata must reject URLs and arbitrary response text");
+	}
+
+	private static void testRetrySchedulerAndStateWiring() throws Exception {
+		ScheduledExecutorService scheduler = DownloadExecutors.newRetryScheduler();
+		try {
+			final CountDownLatch executed = new CountDownLatch(1);
+			scheduler.schedule(new Runnable() {
+				@Override
+				public void run() {
+					executed.countDown();
+				}
+			}, 1L, TimeUnit.MILLISECONDS);
+			check(executed.await(5L, TimeUnit.SECONDS), "retry scheduler must execute delayed work");
+		} finally {
+			scheduler.shutdownNow();
+		}
+
+		String monitoringSource = new String(
+				Files.readAllBytes(Paths.get("src/nicelee/ui/thread/MonitoringThread.java")), StandardCharsets.UTF_8);
+		check(!monitoringSource.contains("panel.continueTask()"),
+				"monitoring snapshots must not submit automatic retries");
+		check(monitoringSource.contains("DownloadTaskState.RETRYING") || monitoringSource.contains("case RETRYING"),
+				"retry countdown must be represented explicitly in the UI");
+
+		String runnableSource = new String(
+				Files.readAllBytes(Paths.get("src/nicelee/ui/thread/DownloadRunnableInternal.java")),
+				StandardCharsets.UTF_8);
+		check(runnableSource.contains("deltaTime > Global.urlValidPeriod"),
+				"expired queued URLs must still be resolved again");
+		check(runnableSource.contains("submissionToken"),
+				"download work must carry a stale-submission guard");
 	}
 
 	private static void check(boolean condition, String message) {

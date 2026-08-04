@@ -10,6 +10,9 @@ import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -29,6 +32,8 @@ import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
 import nicelee.ui.TabDownload;
+import nicelee.ui.task.DownloadTaskLifecycle;
+import nicelee.ui.task.DownloadTaskState;
 import nicelee.ui.util.SwingDispatch;
 
 public class DownloadInfoPanel extends JPanel implements ActionListener {
@@ -49,15 +54,7 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 	public String avid_qn;
 	public volatile String formattedTitle;
 	public volatile boolean stopOnQueue = false;
-	volatile int failCnt = 0;
-
-	public int getFailCnt() {
-		return failCnt;
-	}
-
-	public void setFailCnt(int failCnt) {
-		this.failCnt = failCnt;
-	}
+	private final DownloadTaskLifecycle lifecycle = new DownloadTaskLifecycle();
 
 	volatile long lastCntTime = 0L;
 	volatile long lastCnt = 0L;
@@ -184,11 +181,11 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 				@Override
 				public void run() {
 					try {
-						StatusEnum status = iNeedAV.getDownloader().currentStatus();
-						if (status == StatusEnum.DOWNLOADING) {
+						DownloadTaskState state = lifecycle.snapshot().getState();
+						if (state == DownloadTaskState.QUEUED || state == DownloadTaskState.DOWNLOADING
+								|| state == DownloadTaskState.MERGING) {
 							stopTask();
 						} else {
-							setFailCnt(0);
 							continueTask();
 						}
 					} catch (RuntimeException error) {
@@ -221,12 +218,18 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		this.lbavName.setText(formattedTitle);
 		this.lbavName.setToolTipText(formattedTitle);
 		this.stopOnQueue = false;
+		this.lifecycle.markQueued();
 		this.lbCurrentStatus.setText("下载地址已就绪，等待调度...");
 		this.lbDownFile.setText("等待下载中...");
 	}
 
 	public void markSubmitted() {
 		setPreparing(false);
+	}
+
+	public boolean submitInitialTask(long urlTimestamp) {
+		long token = lifecycle.claimInitialSubmission();
+		return submitExecution(token, urlTimestamp, false, 0);
 	}
 
 	public void setPreparing(boolean preparing) {
@@ -275,28 +278,85 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		if (iNeedAV == null) {
 			return;
 		}
+		lifecycle.pause();
+		stopOnQueue = true;
 		Downloader downloader = iNeedAV.getDownloader();
 		downloader.stopTask();
-		stopOnQueue = true;
 	}
 
 	/**
 	 * 继续任务(方法内包含状态判断)
 	 */
-	public void continueTask() {
+	public boolean continueTask() {
 		if (iNeedAV == null) {
-			return;
+			return false;
 		}
 		stopOnQueue = false;
-		Downloader downloader = iNeedAV.getDownloader();
-		// 如果正在下载 或 下载完毕，则不需要下载
-		StatusEnum status = downloader.currentStatus();
-		if (status != StatusEnum.DOWNLOADING && status != StatusEnum.SUCCESS && status != StatusEnum.PROCESSING) {
-			downloader.startTask();
-			if(!Global.downLoadThreadPool.isShutdown()){
-				Global.downLoadThreadPool.execute(
-						new DownloadRunnableInternal(this, System.currentTimeMillis(), true, failCnt));
+		long token = lifecycle.claimManualRetry();
+		return submitExecution(token, System.currentTimeMillis(), true, 0);
+	}
+
+	public DownloadTaskLifecycle.Snapshot getTaskSnapshot() {
+		return lifecycle.snapshot();
+	}
+
+	public boolean beginExecution(long submissionToken) {
+		return lifecycle.beginExecution(submissionToken);
+	}
+
+	public boolean markDownloading(long submissionToken) {
+		return lifecycle.markDownloading(submissionToken);
+	}
+
+	public void markMerging() {
+		lifecycle.markMerging();
+	}
+
+	public boolean markExecutionSucceeded(long submissionToken) {
+		return lifecycle.markSucceeded(submissionToken);
+	}
+
+	public void markExecutionFailed(long submissionToken, String failureType) {
+		final DownloadTaskLifecycle.RetrySchedule retry = lifecycle.markFailed(submissionToken,
+				Global.maxFailRetry, System.currentTimeMillis(), Global.downloadRetryDelay, failureType);
+		if (!retry.shouldRetry()) {
+			return;
+		}
+		ScheduledExecutorService scheduler = Global.downloadRetryScheduler;
+		if (scheduler == null || scheduler.isShutdown()) {
+			lifecycle.markRetrySchedulingRejected(retry.getToken());
+			return;
+		}
+		long delay = Math.max(0L, retry.getRetryAtMillis() - System.currentTimeMillis());
+		try {
+			scheduler.schedule(new Runnable() {
+				@Override
+				public void run() {
+					long submissionToken = lifecycle.claimScheduledRetry(retry.getToken(),
+							System.currentTimeMillis());
+					submitExecution(submissionToken, System.currentTimeMillis(), true, retry.getRetryCount());
+				}
+			}, delay, TimeUnit.MILLISECONDS);
+		} catch (RejectedExecutionException e) {
+			lifecycle.markRetrySchedulingRejected(retry.getToken());
+		}
+	}
+
+	private boolean submitExecution(long submissionToken, long urlTimestamp, boolean retry, int retryCount) {
+		if (submissionToken == DownloadTaskLifecycle.NO_TOKEN) {
+			return false;
+		}
+		try {
+			if (Global.downLoadThreadPool == null || Global.downLoadThreadPool.isShutdown()) {
+				throw new RejectedExecutionException("下载队列已停止");
 			}
+			Global.downLoadThreadPool.execute(
+					new DownloadRunnableInternal(this, urlTimestamp, retry, retryCount, submissionToken));
+			return true;
+		} catch (RejectedExecutionException e) {
+			lifecycle.markSubmissionRejected(submissionToken);
+			Logger.println("下载任务提交失败: QueueUnavailable");
+			return false;
 		}
 	}
 
@@ -314,6 +374,7 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 		// 删除所有 或 删除已完成的任务
 		// 0 正在下载; 1 下载完毕; -1 出现错误; -2 人工停止;-3队列中
 		if (deleteAll || downloader.currentStatus() == StatusEnum.SUCCESS) {
+			this.lifecycle.cancel();
 			this.stopOnQueue = true;
 			// 全局监控撤销
 			Global.downloadTaskList.remove(this, downloader);

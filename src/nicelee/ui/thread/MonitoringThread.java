@@ -21,6 +21,8 @@ import nicelee.bilibili.util.Logger;
 import nicelee.ui.Audio;
 import nicelee.ui.Global;
 import nicelee.ui.item.DownloadInfoPanel;
+import nicelee.ui.task.DownloadTaskLifecycle;
+import nicelee.ui.task.DownloadTaskState;
 import nicelee.ui.util.DownloadStatusFormatter;
 import nicelee.ui.util.SwingDispatch;
 
@@ -50,16 +52,16 @@ public class MonitoringThread extends Thread {
 		if (Global.playSoundAfterMissionComplete) {
 			Audio.init();
 		}
-		int lastActiveTaskCount = 0;
+		int lastInProgressTaskCount = 0;
 		while (!isInterrupted()) {
 			UiBatch batch = collectSnapshot(map);
 			publish(batch);
 
-			if (Global.playSoundAfterMissionComplete && lastActiveTaskCount > 0
+			if (Global.playSoundAfterMissionComplete && lastInProgressTaskCount > 0
 					&& batch.activeTask == 0 && batch.retryingTask == 0) {
 				Audio.play();
 			}
-			lastActiveTaskCount = batch.activeTask;
+			lastInProgressTaskCount = batch.activeTask + batch.retryingTask;
 			try {
 				Thread.sleep(1500);
 			} catch (InterruptedException e) {
@@ -80,17 +82,22 @@ public class MonitoringThread extends Thread {
 		for (Entry<DownloadInfoPanel, IDownloader> entry : map.entrySet()) {
 			DownloadInfoPanel panel = entry.getKey();
 			IDownloader downloader = entry.getValue();
-			StatusEnum status;
+			StatusEnum downloaderStatus;
 			try {
-				status = downloader.currentStatus();
+				downloaderStatus = downloader.currentStatus();
 			} catch (RuntimeException e) {
-				status = StatusEnum.NONE;
+				downloaderStatus = StatusEnum.NONE;
 			}
 
 			try {
-				String path = resolvePath(panel, downloader, status);
-				switch (status) {
-				case SUCCESS:
+				if (downloaderStatus == StatusEnum.PROCESSING) {
+					panel.markMerging();
+				}
+				DownloadTaskLifecycle.Snapshot snapshot = panel.getTaskSnapshot();
+				DownloadTaskState state = snapshot.getState();
+				String path = resolvePath(panel, downloader, state);
+				switch (state) {
+				case SUCCEEDED:
 					done++;
 					String fileSize = IDownloader.transToSizeStr(downloader.sumTotalFileSize());
 					updates.add(new UiUpdate(panel, path, tips("%d/%d 下载完成. ", downloader),
@@ -100,26 +107,27 @@ public class MonitoringThread extends Thread {
 								String.valueOf(panel.getRealqn()));
 					}
 					break;
-				case FAIL:
+				case FAILED:
 					paused++;
 					stopReported.remove(panel);
-					if (panel.getFailCnt() >= maxFailCount) {
-						updates.add(new UiUpdate(panel, path, tips("%d/%d 下载异常. ", downloader),
-								sizeProgress(downloader), "继续下载", true, LIGHT_RED));
-						if (terminalFailReported.add(panel)) {
-							BatchDownloadRbyRThread.taskFail(panel.getClipInfo(), "fail");
-						}
-					} else {
-						retrying++;
-						terminalFailReported.remove(panel);
-						int retryNumber = panel.getFailCnt() + 1;
-						panel.setFailCnt(retryNumber);
-						updates.add(new UiUpdate(panel, path, "下载异常，正在重试 " + retryNumber + "/" + maxFailCount,
-								sizeProgress(downloader), "继续下载", false, LIGHT_RED));
-						panel.continueTask();
+					updates.add(new UiUpdate(panel, path, failureText(snapshot), failureAdvice(),
+							"重新下载", true, LIGHT_RED));
+					if (terminalFailReported.add(panel)) {
+						BatchDownloadRbyRThread.taskFail(panel.getClipInfo(), failureType(snapshot));
 					}
 					break;
-				case STOP:
+				case RETRYING:
+					retrying++;
+					terminalFailReported.remove(panel);
+					stopReported.remove(panel);
+					long remainingMillis = Math.max(0L, snapshot.getRetryAtMillis() - System.currentTimeMillis());
+					long remainingSeconds = (remainingMillis + 999L) / 1000L;
+					updates.add(new UiUpdate(panel, path,
+							String.format("下载失败，%d 秒后自动重试 %d/%d", remainingSeconds,
+									snapshot.getRetryCount(), maxFailCount),
+							failureAdvice(), "立即重试", true, LIGHT_RED));
+					break;
+				case PAUSED:
 					paused++;
 					terminalFailReported.remove(panel);
 					updates.add(stopped(panel, path, downloader));
@@ -127,42 +135,45 @@ public class MonitoringThread extends Thread {
 						BatchDownloadRbyRThread.taskFail(panel.getClipInfo(), "stop");
 					}
 					break;
-				case PROCESSING:
+				case MERGING:
 					active++;
 					clearTransientReports(panel);
 					updates.add(new UiUpdate(panel, path, tips("%d/%d 转码中... ", downloader),
 							"文件大小: " + IDownloader.transToSizeStr(downloader.sumTotalFileSize()), "暂停", false,
 							LIGHT_ORANGE));
 					break;
-				case NONE:
-					if (panel.stopOnQueue) {
-						paused++;
-						terminalFailReported.remove(panel);
-						updates.add(stopped(panel, path, downloader));
-						if (stopReported.add(panel)) {
-							BatchDownloadRbyRThread.taskFail(panel.getClipInfo(), "stop");
-						}
-					} else {
-						queuing++;
-						clearTransientReports(panel);
-						updates.add(new UiUpdate(panel, path, "等待下载中...", "等待下载中...", "暂停", false,
-								LIGHT_ORANGE));
-					}
+				case PREPARING:
+					queuing++;
+					clearTransientReports(panel);
+					updates.add(new UiUpdate(panel, path, "正在准备下载...", "正在获取下载地址...", "暂停", false,
+							LIGHT_ORANGE));
+					break;
+				case QUEUED:
+					queuing++;
+					clearTransientReports(panel);
+					updates.add(new UiUpdate(panel, path, "等待下载中...", "等待下载中...", "暂停", true,
+							LIGHT_ORANGE));
 					break;
 				case DOWNLOADING:
 					active++;
 					clearTransientReports(panel);
 					updates.add(downloading(panel, path, downloader));
 					break;
+				case CANCELLED:
+					paused++;
+					updates.add(new UiUpdate(panel, path, "任务已取消", "临时文件将被清理", "重新下载", false,
+							LIGHT_PINK));
+					break;
 				default:
 					break;
 				}
 			} catch (RuntimeException e) {
 				Logger.println("刷新下载状态失败: " + e.getClass().getSimpleName());
-				if (status == StatusEnum.STOP || panel.stopOnQueue) {
+				DownloadTaskState state = panel.getTaskSnapshot().getState();
+				if (state == DownloadTaskState.PAUSED || state == DownloadTaskState.CANCELLED) {
 					paused++;
 					updates.add(new UiUpdate(panel, null, "任务已停止", "任务已停止", "继续下载", true, LIGHT_PINK));
-				} else if (status == StatusEnum.PROCESSING) {
+				} else if (state == DownloadTaskState.MERGING) {
 					active++;
 					updates.add(new UiUpdate(panel, null, "转码中...", "正在处理文件", "暂停", false, LIGHT_ORANGE));
 				} else {
@@ -176,7 +187,7 @@ public class MonitoringThread extends Thread {
 		successReported.retainAll(map.keySet());
 		terminalFailReported.retainAll(map.keySet());
 		stopReported.retainAll(map.keySet());
-		return new UiBatch(updates, map.size(), active, paused - retrying, done, queuing, retrying);
+		return new UiBatch(updates, map.size(), active, paused, done, queuing, retrying);
 	}
 
 	private UiUpdate downloading(DownloadInfoPanel panel, String path, IDownloader downloader) {
@@ -198,13 +209,13 @@ public class MonitoringThread extends Thread {
 				"继续下载", true, LIGHT_PINK);
 	}
 
-	private String resolvePath(DownloadInfoPanel panel, IDownloader downloader, StatusEnum status) {
+	private String resolvePath(DownloadInfoPanel panel, IDownloader downloader, DownloadTaskState state) {
 		File file = downloader.file();
 		if (file == null) {
 			return null;
 		}
 		String path = file.getAbsolutePath();
-		if (Global.doRenameAfterComplete && status == StatusEnum.SUCCESS && panel.formattedTitle != null) {
+		if (Global.doRenameAfterComplete && state == DownloadTaskState.SUCCEEDED && panel.formattedTitle != null) {
 			path = path.replaceFirst(AUTO_RENAME_PATTERN, Matcher.quoteReplacement(panel.formattedTitle));
 		}
 		return path;
@@ -235,8 +246,8 @@ public class MonitoringThread extends Thread {
 				update.apply();
 			}
 			if (Global.downloadTab != null) {
-				Global.downloadTab.refreshStatus(batch.totalTask, batch.activeTask + batch.retryingTask,
-						batch.pausedTask, batch.doneTask, batch.queuingTask);
+				Global.downloadTab.refreshStatus(batch.totalTask, batch.activeTask, batch.pausedTask,
+						batch.doneTask, batch.queuingTask, batch.retryingTask);
 			}
 		}
 		uiRefreshScheduled.set(false);
@@ -253,6 +264,18 @@ public class MonitoringThread extends Thread {
 		return String.format("文件%d进度： %s/%s", downloader.currentTask(),
 				IDownloader.transToSizeStr(downloader.currentFileDownloadedSize()),
 				IDownloader.transToSizeStr(downloader.currentFileTotalSize()));
+	}
+
+	private static String failureText(DownloadTaskLifecycle.Snapshot snapshot) {
+		return "下载失败（" + failureType(snapshot) + "）";
+	}
+
+	private static String failureAdvice() {
+		return "建议检查网络、登录状态和资源可用性后重试";
+	}
+
+	private static String failureType(DownloadTaskLifecycle.Snapshot snapshot) {
+		return snapshot.getFailureType() == null ? "DownloadFailed" : snapshot.getFailureType();
 	}
 
 	private static Set<DownloadInfoPanel> newConcurrentSet() {

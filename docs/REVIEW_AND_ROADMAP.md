@@ -430,3 +430,28 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
 - 两次隔离验收均未残留 `.partN`、`.part.meta` 或 `.part.merge`；日志未出现完整查询参数、结构化响应或本机绝对路径。
 
 手动多线程复验可在原 `manualE2e` 命令后增加 `-Pe2eThreads=3`。该参数默认值仍为 `0`，产品默认配置也继续关闭多线程；在 Windows 实机和真实 GUI 暂停/继续完成前，不把该实验能力改为默认开启。
+
+## 23. 统一任务状态与暂停重试里程碑
+
+截至 2026-08-04，下载卡片、队列任务和底层下载器之间增加独立、线程安全的任务生命周期，解决监控轮询、手动继续和自动重试可能重复提交的问题：
+
+- 用户可见状态统一为 `PREPARING / QUEUED / DOWNLOADING / PAUSED / RETRYING / MERGING / SUCCEEDED / FAILED / CANCELLED`；底层 `StatusEnum` 继续只描述协议下载器内部状态，避免 UI 再从六个传输状态猜测完整生命周期。
+- 每次进入下载线程池都必须取得唯一提交令牌。暂停、取消、手动重试会使旧令牌失效，因此已排队或正在结束的旧任务不能再次开始下载，也不能覆盖新任务的状态。
+- 自动重试从 `MonitoringThread` 的 1.5 秒轮询副作用中移出，改由单独的 daemon 调度器执行；默认等待 3 秒，可通过 `bilibili.download.retry.delaySeconds` 调整。卡片显示剩余秒数、当前次数和最大次数，并提供“立即重试”。
+- 手动立即重试会取消旧的定时重试资格；同一任务的重复点击只能有一个有效提交。全部暂停会同时使排队、下载中和等待重试的任务失效，继续后保留底层 `.part` / 分片续传能力。
+- 下载线程池关闭或拒绝任务时不再移除卡片，任务进入 `FAILED` 并显示 `QueueUnavailable`；失败信息只保留长度受限的错误类型和处理建议，不显示 URL、响应正文或异常详情。
+- 下载链接仍按原策略在手动重试或队列等待超过有效期后重新查询；清晰度改变会以 `QualityChanged` 安全失败，避免用已变化的媒体布局继续旧分片。
+- 下载页汇总新增独立“重试”计数；`MonitoringThread` 只读取任务快照和发布 UI 更新，不再直接调用 `continueTask()`。下载线程检测到 ffmpeg 处理阶段时映射为 `MERGING`。
+- 下载优先队列比较器改用 `Long.compare` / `Integer.compare`，修复时间戳强制转 `int` 的溢出风险和手动重试比较结果不对称的问题。
+
+自动回归新增状态转换、首次/定时/手动提交去重、暂停与取消令牌失效、重试次数和截止时间、队列拒绝、调度器执行、失败信息过滤、过期 URL 重查防回退检查。以下两套完整验证均通过，每套执行 21 个任务：
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  ./gradlew --no-daemon --offline -PjavaToolchainVersion=8 clean check jar manualE2eClasses
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  ./gradlew --no-daemon --offline clean check jar manualE2eClasses
+```
+
+仍需人工验收：真实 macOS/Windows GUI 中对排队任务、下载中任务和等待重试任务分别执行暂停/立即重试/全部暂停；断网后恢复、B站签名 URL 过期重查、ffmpeg 合并期间暂停的产品语义也仍为 `NOT VERIFIED`。自动检查已证明过期任务不会重复执行，并复用了里程碑 20/22 的 loopback Range、截断、412/416 和暂停续传契约；本里程碑没有启用默认多线程，也没有引入任务持久化或 SQLite。

@@ -3,7 +3,6 @@ package nicelee.ui.thread;
 import nicelee.bilibili.API;
 import nicelee.bilibili.INeedAV;
 import nicelee.bilibili.downloaders.Downloader;
-import nicelee.bilibili.enums.StatusEnum;
 import nicelee.bilibili.exceptions.BilibiliError;
 import nicelee.bilibili.parsers.InputParser;
 import nicelee.bilibili.util.CmdUtil;
@@ -13,7 +12,6 @@ import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
 import nicelee.ui.item.DownloadInfoPanel;
-import nicelee.ui.item.JOptionPaneManager;
 
 public class DownloadRunnableInternal implements Runnable {
 
@@ -21,6 +19,7 @@ public class DownloadRunnableInternal implements Runnable {
 	final long urlTimestamp;
 	final boolean invokeByContinueTask;
 	final int failCnt;
+	final long submissionToken;
 	// 下面这些值都可以从 downPanel 直接或者间接获取
 	final String record;
 	final INeedAV iNeedAV;
@@ -37,11 +36,13 @@ public class DownloadRunnableInternal implements Runnable {
 	 * @param invokeByContinueTask		该线程是否是 “继续任务”， 而不是 “开始任务”
 	 * @param failCnt					在此之前的任务失败次数
 	 */
-	public DownloadRunnableInternal(DownloadInfoPanel downPanel, long urlTimestamp, boolean invokeByContinueTask, int failCnt) {
+	public DownloadRunnableInternal(DownloadInfoPanel downPanel, long urlTimestamp, boolean invokeByContinueTask,
+			int failCnt, long submissionToken) {
 		this.downPanel = downPanel;
 		this.urlTimestamp = urlTimestamp;
 		this.invokeByContinueTask = invokeByContinueTask;
 		this.failCnt = failCnt;
+		this.submissionToken = submissionToken;
 		iNeedAV = downPanel.iNeedAV;
 		downloader = iNeedAV.getDownloader();
 		urlQuery = downPanel.url;
@@ -57,15 +58,14 @@ public class DownloadRunnableInternal implements Runnable {
 
 	@Override
 	public void run() {
+		boolean succeeded = false;
+		String failureType = "DownloadFailed";
 		try {
-			if (downloader.currentStatus() == StatusEnum.NONE && downPanel.stopOnQueue) {
-				Logger.println("已经删除等待队列,无需再下载");
+			if (!downPanel.beginExecution(submissionToken)) {
+				Logger.println("忽略已失效的下载队列任务");
 				return;
 			}
-			if (downloader.currentStatus() == StatusEnum.STOP) {
-				Logger.println("已经人工停止,无需再下载");
-				return;
-			}
+			downloader.startTask();
 			// 判断是不是需要重新获取url
 			String validUrl = urlQuery;
 			if (!ResourcesUtil.isPicture(avid)) { // 不是图片类型(该类型没啥好重新获取的)
@@ -89,35 +89,53 @@ public class DownloadRunnableInternal implements Runnable {
 					downPanel.url = validUrl;
 					if (realQN != parser.getVideoLinkQN()) {
 						Logger.println("清晰度链接已经改变，无法再重新下载");
+						failureType = "QualityChanged";
 						iNeedAV.getUtil().stopDownloadAsFail();
 						return;
 					}
 				}
 			}
+			if (!downPanel.markDownloading(submissionToken)) {
+				return;
+			}
 			// 开始下载
 			if (iNeedAV.downloadClip(validUrl, avid, iNeedAV.getInputParser(avid).getVideoLinkQN(), page)) {
+				succeeded = downPanel.markExecutionSucceeded(submissionToken);
 				// 下载成功后保存到仓库
-				if (Global.saveToRepo) {
+				if (succeeded && Global.saveToRepo) {
 					RepoUtil.appendAndSave(record);
 				}
-				if (Global.thumbUpAfterDownloaded && Global.isLogin && avid.startsWith("BV")) {
+				if (succeeded && Global.thumbUpAfterDownloaded && Global.isLogin && avid.startsWith("BV")) {
 					API.like(avid);
 				}
-				CmdUtil.convertOrAppendCmdToRenameBat(avid_qn, formattedTitle, page);
+				if (succeeded) {
+					CmdUtil.convertOrAppendCmdToRenameBat(avid_qn, formattedTitle, page);
+				}
 			}
 		} catch (BilibiliError e) {
-			JOptionPaneManager.alertErrMsgWithNewThread("发生了预料之外的错误", ResourcesUtil.detailsOfException(e));
+			failureType = safeErrorType(e);
+			Logger.println("下载任务失败: " + failureType);
 		} catch (Exception e) {
-			e.printStackTrace();
+			failureType = safeErrorType(e);
+			Logger.println("下载任务失败: " + failureType);
+		} finally {
+			if (!succeeded) {
+				downPanel.markExecutionFailed(submissionToken, failureType);
+			}
 		}
 		if (Global.sleepAfterDownloadComplete > 0) {
 			try {
 				Thread.sleep(Global.sleepAfterDownloadComplete);
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				Thread.currentThread().interrupt();
 			}
 		}
 
+	}
+
+	private static String safeErrorType(Throwable error) {
+		String type = error == null ? null : error.getClass().getSimpleName();
+		return type == null || !type.matches("[A-Za-z0-9_.-]{1,64}") ? "DownloadFailed" : type;
 	}
 
 }
