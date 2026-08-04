@@ -129,7 +129,7 @@ public class UiExperienceTest {
 			}
 		});
 		check(tab.getLayout() instanceof BorderLayout, "download tab must resize with BorderLayout");
-		check(tab.getJpContent().getLayout() instanceof GridLayout, "download cards must use a vertical grid");
+		check(tab.getJpContent().getLayout() instanceof javax.swing.BoxLayout, "download cards must use a vertical list");
 
 		DownloadInfoPanel panel = SwingDispatch.callAndWait(new Callable<DownloadInfoPanel>() {
 			@Override
@@ -143,7 +143,7 @@ public class UiExperienceTest {
 				return new DownloadInfoPanel(clip, 80);
 			}
 		});
-		check(panel.getLayout() instanceof GridBagLayout, "download card must distribute horizontal space");
+		check(panel.getLayout() instanceof BorderLayout, "download card must distribute horizontal space");
 	}
 
 	private static void testResponsiveVideoLayoutAndFeedback() {
@@ -156,7 +156,7 @@ public class UiExperienceTest {
 		check(tab.getLayout() instanceof BorderLayout, "video tab must resize with BorderLayout");
 		check(tab.getDetailSplitPane().getOrientation() == JSplitPane.HORIZONTAL_SPLIT,
 				"video preview and clip list must use a horizontal split pane");
-		check(tab.getJpContent().getLayout() instanceof GridLayout, "video clips must use a vertical grid");
+		check(tab.getJpContent().getLayout() instanceof javax.swing.BoxLayout, "video clips must use a vertical list");
 		check(tab.getLoadProgress().isVisible(), "video parsing progress must be visible while loading");
 		check(!tab.areDownloadActionsEnabled(), "video download actions must be disabled while loading");
 

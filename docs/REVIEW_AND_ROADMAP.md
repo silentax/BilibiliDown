@@ -455,3 +455,51 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
 ```
 
 仍需人工验收：真实 macOS/Windows GUI 中对排队任务、下载中任务和等待重试任务分别执行暂停/立即重试/全部暂停；断网后恢复、B站签名 URL 过期重查、ffmpeg 合并期间暂停的产品语义也仍为 `NOT VERIFIED`。自动检查已证明过期任务不会重复执行，并复用了里程碑 20/22 的 loopback Range、截断、412/416 和暂停续传契约；本里程碑没有启用默认多线程，也没有引入任务持久化或 SQLite。
+
+## 24. 界面视觉与交互改造里程碑
+
+截至 2026-08-04，针对用户反馈的三项界面问题完成改造：主页背景难看、下载页排版不自适应、预览页缺少批量选择。
+
+主页（TabIndex）：
+
+- 移除重复平铺背景图，改为代码绘制的浅蓝-淡紫-樱粉纯净渐变，叠加柔和光晕、波浪和星点装饰。
+- 标题从图片改为文字+副标题+功能引导行，整体使用卡片式布局和 AnimeUi 配色。
+- 搜索输入框和按钮统一应用 AnimeUi 样式。
+
+预览页（ClipInfoPanel + TabVideo）：
+
+- 每个分集从固定尺寸卡片改为紧凑列表行（560×76），左侧复选框 + 分集编号徽章，中间标题和元数据，右侧操作按钮。
+- 新增批量选择工具栏：全选 / 取消全选 / 反选 / 下载所选，实时显示已选数量。
+- 单击分集行加载预览图，双击下载。选中行高亮为强调色。
+- 分集列表行高从 178px 调整为 84px，匹配新的紧凑布局。
+
+下载页（TabDownload + DownloadInfoPanel）：
+
+- 移除平铺背景图，应用与主页一致的 AnimeUi 渐变背景。
+- 下载任务卡片从 GridBagLayout + 红色调试边框改为 BorderLayout 紧凑行（76px），使用 AnimeUi 卡片边框和配色。
+- 任务行布局：左侧文件名（粗体）+ 状态文字，下方副标题 + 进度文字，右侧操作按钮区（暂停/继续、打开文件、打开文件夹、删除任务）。
+- 状态栏和功能按钮统一应用 AnimeUi 样式。
+- 任务行高从 128px 缩减为 84px，提升单屏可见任务数。
+
+新增 `AnimeUi` 视觉基线类，集中管理配色、渐变背景、卡片边框和按钮样式，供各页面统一调用。
+
+以下两套完整验证均通过，每套执行 21 个任务：
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  ./gradlew --no-daemon --offline -PjavaToolchainVersion=8 clean check jar manualE2eClasses
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  ./gradlew --no-daemon --offline clean check jar manualE2eClasses
+```
+
+仍需人工验收：真实 GUI 中主页渐变效果、预览页批量选择下载流程、下载页任务行在不同窗口尺寸下的自适应表现。
+
+布局修复：下载页和预览页的任务列表从 `GridLayout` 改为 `BoxLayout`（Y 轴），使每个任务行/分集行保持固定 76px 高度，不再被拉伸填满容器。下载页 `addTaskPanel` / `removeTaskPanel` 同步管理间距占位符；预览页渲染分集时在每个 `ClipInfoPanel` 后插入 8px 垂直间距。
+
+真实 GUI 验收（macOS arm64 / JDK 21）：
+- 主页渐变背景、标题区、搜索栏样式正常。
+- 单分 P 视频解析后分集行保持紧凑高度，不再平铺。
+- 多分 P 视频分集列表正常排列，批量选择工具栏（全选/取消全选/反选/下载所选）功能正常。
+- 下载页任务行紧凑显示，完成后不再平铺，按钮整齐排列。
+- 视频下载成功，ffmpeg 合并正常，产物可播放。

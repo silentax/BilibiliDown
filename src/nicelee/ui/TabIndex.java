@@ -4,18 +4,16 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.awt.Graphics2D;
 import java.awt.Image;
-import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.net.URL;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,6 +36,7 @@ import nicelee.ui.item.MJTabVideo;
 import nicelee.ui.item.MJTextField;
 import nicelee.ui.thread.GetVideoDetailThread;
 import nicelee.ui.thread.LoginThread;
+import nicelee.ui.util.AnimeUi;
 import nicelee.ui.util.SwingDispatch;
 
 public class TabIndex extends JPanel implements ActionListener, MouseListener, ItemListener {
@@ -47,7 +46,6 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	 */
 	private static final long serialVersionUID = -5829023045158490349L;
 	public ImageIcon imgIconHeaderDefault = new ImageIcon(this.getClass().getResource("/resources/header.png"));
-	public ImageIcon backgroundIcon = Global.backgroundImg;
 	public JLabel jlHeader;
 	public JComboBox<Object> cmbFavList=new JComboBox<>();
 	JComboBox<String> cmbDownloadMode = new JComboBox<>(new String[] { "视频+音频", "仅视频", "仅音频" });
@@ -68,62 +66,78 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	}
 
 	public void init() {
-		this.setLayout(new BorderLayout(0, 24));
-		this.setBorder(new EmptyBorder(36, 36, 36, 36));
+		this.setLayout(new BorderLayout(0, 20));
+		this.setBorder(new EmptyBorder(28, 34, 34, 34));
 
-		JPanel headerPanel = new JPanel(new BorderLayout(16, 0));
-		headerPanel.setOpaque(false);
-		imgIconHeaderDefault = new ImageIcon(imgIconHeaderDefault.getImage().getScaledInstance(80, 80, Image.SCALE_DEFAULT));
+		JPanel headerPanel = new JPanel(new BorderLayout(22, 0));
+		headerPanel.setOpaque(true);
+		headerPanel.setBackground(new Color(255, 255, 255, 238));
+		headerPanel.setBorder(AnimeUi.cardBorder(20, 24));
+		imgIconHeaderDefault = new ImageIcon(imgIconHeaderDefault.getImage().getScaledInstance(68, 68, Image.SCALE_SMOOTH));
 		jlHeader = new JLabel(imgIconHeaderDefault);
+		jlHeader.setToolTipText("登录或查看账号状态");
 		jlHeader.addMouseListener(this);
 		headerPanel.add(jlHeader, BorderLayout.EAST);
 
-		URL fileURL = this.getClass().getResource("/resources/title.png");
-		ImageIcon imgIcon = new ImageIcon(fileURL);
-		JLabel titleLabel = new JLabel(imgIcon, JLabel.CENTER);
-		headerPanel.add(titleLabel, BorderLayout.CENTER);
+		JPanel titlePanel = new JPanel(new BorderLayout(0, 7));
+		titlePanel.setOpaque(false);
+		JLabel titleLabel = new JLabel("BilibiliDown");
+		titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 30.0f));
+		titleLabel.setForeground(AnimeUi.TEXT_PRIMARY);
+		JLabel subtitle = new JLabel("把喜欢的内容，清爽地收进本地");
+		subtitle.setFont(subtitle.getFont().deriveFont(15.0f));
+		subtitle.setForeground(AnimeUi.TEXT_SECONDARY);
+		JLabel featureLine = new JLabel("粘贴链接  ·  选择分集  ·  安全下载");
+		featureLine.setForeground(AnimeUi.ACCENT);
+		titlePanel.add(titleLabel, BorderLayout.NORTH);
+		titlePanel.add(subtitle, BorderLayout.CENTER);
+		titlePanel.add(featureLine, BorderLayout.SOUTH);
+		headerPanel.add(titlePanel, BorderLayout.CENTER);
 
-		JPanel searchPanel = new JPanel(new BorderLayout(0, 10));
-		searchPanel.setOpaque(false);
-		JPanel searchControls = new JPanel(new GridBagLayout());
+		JPanel searchPanel = new JPanel(new BorderLayout(0, 12));
+		searchPanel.setOpaque(true);
+		searchPanel.setBackground(AnimeUi.SURFACE);
+		searchPanel.setBorder(AnimeUi.cardBorder(18, 20));
+		JPanel searchControls = new JPanel(new BorderLayout(10, 12));
 		searchControls.setOpaque(false);
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.gridy = 0;
-		constraints.insets = new Insets(0, 4, 0, 4);
-		constraints.fill = GridBagConstraints.HORIZONTAL;
 
-		txtSearch.setPreferredSize(new Dimension(420, 40));
+		txtSearch.setPreferredSize(new Dimension(520, 42));
 		txtSearch.setMinimumSize(new Dimension(220, 40));
+		AnimeUi.styleInput(txtSearch);
 		txtSearch.addActionListener(this);
 		btnSearch.addActionListener(this);
-		btnSearch.setPreferredSize(new Dimension(80, 40));
+		AnimeUi.stylePrimaryButton(btnSearch);
+		btnSearch.setPreferredSize(new Dimension(96, 42));
 		btnSearchNextPage.addActionListener(this);
-		btnSearchNextPage.setPreferredSize(new Dimension(80, 40));
+		AnimeUi.styleSecondaryButton(btnSearchNextPage);
 		
         cmbFavList.addItem("---我的收藏夹---");
-		cmbFavList.setPreferredSize(new Dimension(120, 40));
+		cmbFavList.setPreferredSize(new Dimension(170, 34));
 		cmbFavList.addItemListener(this);
-		cmbDownloadMode.setPreferredSize(new Dimension(110, 40));
+		cmbDownloadMode.setPreferredSize(new Dimension(130, 34));
 		cmbDownloadMode.setSelectedIndex(Global.downloadMode.getMode());
 		cmbDownloadMode.addItemListener(this);
 
-		constraints.gridx = 0;
-		constraints.weightx = 1.0;
-		searchControls.add(txtSearch, constraints);
-		constraints.weightx = 0.0;
-		constraints.gridx++;
-		searchControls.add(cmbDownloadMode, constraints);
-		constraints.gridx++;
-		searchControls.add(btnSearch, constraints);
-		constraints.gridx++;
-		searchControls.add(btnSearchNextPage, constraints);
-		constraints.gridx++;
-		searchControls.add(cmbFavList, constraints);
+		JPanel inputRow = new JPanel(new BorderLayout(10, 0));
+		inputRow.setOpaque(false);
+		inputRow.add(txtSearch, BorderLayout.CENTER);
+		inputRow.add(btnSearch, BorderLayout.EAST);
+		searchControls.add(inputRow, BorderLayout.NORTH);
 
-		lbSearchStatus.setForeground(new Color(60, 60, 60));
+		JPanel options = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 0));
+		options.setOpaque(false);
+		JLabel modeLabel = new JLabel("下载内容");
+		modeLabel.setForeground(AnimeUi.TEXT_SECONDARY);
+		options.add(modeLabel);
+		options.add(cmbDownloadMode);
+		options.add(cmbFavList);
+		options.add(btnSearchNextPage);
+		searchControls.add(options, BorderLayout.CENTER);
+
+		lbSearchStatus.setForeground(AnimeUi.TEXT_SECONDARY);
 		lbSearchStatus.setBorder(new EmptyBorder(2, 4, 2, 4));
-		searchPanel.add(searchControls, BorderLayout.NORTH);
-		searchPanel.add(lbSearchStatus, BorderLayout.CENTER);
+		searchPanel.add(searchControls, BorderLayout.CENTER);
+		searchPanel.add(lbSearchStatus, BorderLayout.SOUTH);
 		JPanel topPanel = new JPanel(new BorderLayout(0, 24));
 		topPanel.setOpaque(false);
 		topPanel.add(headerPanel, BorderLayout.NORTH);
@@ -165,33 +179,10 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 	@Override
 	public void paintComponent(Graphics og) {
 		super.paintComponent(og);
-		if (og == null || backgroundIcon == null) {
+		if (og == null) {
 			return;
 		}
-		Graphics g = og.create();
-		Image img = backgroundIcon.getImage();
-		int width = img.getWidth(this.getParent());
-		int height = img.getHeight(this.getParent());
-		if (width <= 0 || height <= 0) {
-			g.dispose();
-			return;
-		}
-		int xGap = 5;
-		int xCnt = this.getSize().width / (width + xGap) + 1;
-		int yGap = 5;
-		int yCnt = this.getSize().height / (height + yGap) + 1;
-		if( xCnt >= 3) {
-			for(int x = 0; x <= xCnt; x++) {
-				int xp = xGap + (width + xGap) * x;
-				for(int y = 0; y < yCnt; y++) {
-					int yp = yGap + (height + yGap) * y;
-					g.drawImage(backgroundIcon.getImage(), xp, yp, width, height, this.getParent());
-				}
-			}
-		}else {
-			g.drawImage(backgroundIcon.getImage(), 0, 0, this.getSize().width, this.getSize().height, this.getParent());
-		}
-		g.dispose();
+		AnimeUi.paintBackground((Graphics2D) og, getWidth(), getHeight());
 	}
 	
 	/**
@@ -263,7 +254,7 @@ public class TabIndex extends JPanel implements ActionListener, MouseListener, I
 		btnSearchNextPage.setEnabled(!busy);
 		cmbFavList.setEnabled(!busy);
 		lbSearchStatus.setText(status);
-		lbSearchStatus.setForeground(busy ? new Color(25, 90, 160) : new Color(60, 60, 60));
+		lbSearchStatus.setForeground(busy ? AnimeUi.ACCENT : AnimeUi.TEXT_SECONDARY);
 	}
 
 	private String compact(String value) {

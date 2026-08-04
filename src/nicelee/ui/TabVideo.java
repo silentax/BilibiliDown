@@ -1,6 +1,7 @@
 package nicelee.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -45,7 +46,9 @@ import javax.swing.border.EmptyBorder;
 import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
+import nicelee.ui.item.ClipInfoPanel;
 import nicelee.ui.item.MJButton;
+import nicelee.ui.util.AnimeUi;
 import nicelee.ui.util.SwingDispatch;
 import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.DownloadRunnable;
@@ -79,6 +82,12 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 	private JProgressBar loadProgress;
 	private JSplitPane detailSplitPane;
 	private final AtomicLong previewRequestSequence = new AtomicLong();
+	JButton btnSelectAll;
+	JButton btnSelectNone;
+	JButton btnInvert;
+	JButton btnDownloadSelected;
+	JLabel lbSelectionSummary;
+	JPanel selectionBar;
 	
 
 	public TabVideo(JLabel lbTabTitle) {
@@ -145,6 +154,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		controls.add(cbQn);
 
 		btnDownAll = new MJButton("批量下载");
+		AnimeUi.styleSecondaryButton(btnDownAll);
 		btnDownAll.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -157,6 +167,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		controls.add(btnDownAll);
 
 		btnDownCC = new MJButton("字幕下载");
+		AnimeUi.styleSecondaryButton(btnDownCC);
 		btnDownCC.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -184,7 +195,8 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		lbAvPrivew.setMinimumSize(new Dimension(300, 260));
 		lbAvPrivew.addMouseListener(this);
 
-		jpContent = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
+		jpContent = new JPanel();
+		jpContent.setLayout(new javax.swing.BoxLayout(jpContent, javax.swing.BoxLayout.Y_AXIS));
 		jpContent.setBorder(new EmptyBorder(8, 8, 8, 8));
 		jpContent.setPreferredSize(new Dimension(0, 300));
 		jpContent.setOpaque(false);
@@ -211,7 +223,72 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 				}
 			}
 		});
-		this.add(detailSplitPane, BorderLayout.CENTER);
+		// 批量选择工具栏
+		selectionBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+		selectionBar.setOpaque(false);
+		lbSelectionSummary = new JLabel("已选 0 / 0 集");
+		lbSelectionSummary.setForeground(AnimeUi.TEXT_SECONDARY);
+		btnSelectAll = new MJButton("全选");
+		btnSelectNone = new MJButton("取消全选");
+		btnInvert = new MJButton("反选");
+		btnDownloadSelected = new MJButton("下载所选");
+		AnimeUi.styleSecondaryButton(btnSelectAll);
+		AnimeUi.styleSecondaryButton(btnSelectNone);
+		AnimeUi.styleSecondaryButton(btnInvert);
+		AnimeUi.stylePrimaryButton(btnDownloadSelected);
+		btnDownloadSelected.setEnabled(false);
+		btnSelectAll.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				for (Component comp : jpContent.getComponents()) {
+					if (comp instanceof ClipInfoPanel) {
+						((ClipInfoPanel) comp).setSelectedForDownload(true);
+					}
+				}
+				updateSelectionSummary();
+			}
+		});
+		btnSelectNone.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				for (Component comp : jpContent.getComponents()) {
+					if (comp instanceof ClipInfoPanel) {
+						((ClipInfoPanel) comp).setSelectedForDownload(false);
+					}
+				}
+				updateSelectionSummary();
+			}
+		});
+		btnInvert.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				for (Component comp : jpContent.getComponents()) {
+					if (comp instanceof ClipInfoPanel) {
+						ClipInfoPanel clipPanel = (ClipInfoPanel) comp;
+						clipPanel.setSelectedForDownload(!clipPanel.isSelectedForDownload());
+					}
+				}
+				updateSelectionSummary();
+			}
+		});
+		btnDownloadSelected.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				downloadSelected();
+			}
+		});
+		selectionBar.add(lbSelectionSummary);
+		selectionBar.add(btnSelectAll);
+		selectionBar.add(btnSelectNone);
+		selectionBar.add(btnInvert);
+		selectionBar.add(btnDownloadSelected);
+		selectionBar.setVisible(false);
+
+		JPanel centerWrapper = new JPanel(new BorderLayout(0, 8));
+		centerWrapper.setOpaque(false);
+		centerWrapper.add(selectionBar, BorderLayout.NORTH);
+		centerWrapper.add(detailSplitPane, BorderLayout.CENTER);
+		this.add(centerWrapper, BorderLayout.CENTER);
 		setLoading(true);
 	}
 
@@ -234,6 +311,9 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		btnDownCC.setEnabled(!loading);
 		btnNextPage.setEnabled(!loading);
 		loadProgress.setVisible(loading);
+		if (selectionBar != null) {
+			selectionBar.setVisible(false);
+		}
 		if (loading) {
 			previewRequestSequence.incrementAndGet();
 			showPreviewMessage("正在解析...");
@@ -254,6 +334,10 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		btnNextPage.setEnabled(true);
 		lbLoadStatus.setForeground(hasClips ? new Color(40, 110, 55) : new Color(145, 95, 20));
 		lbLoadStatus.setText(hasClips ? "解析完成，共 " + clipCount + " 个分集" : "解析完成，未找到可下载分集");
+		selectionBar.setVisible(hasClips);
+		if (hasClips) {
+			updateSelectionSummary();
+		}
 	}
 
 	public void beginRenderingClips(int clipCount) {
@@ -262,6 +346,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		btnDownAll.setEnabled(false);
 		btnDownCC.setEnabled(false);
 		btnNextPage.setEnabled(false);
+		selectionBar.setVisible(false);
 		lbLoadStatus.setForeground(new Color(25, 90, 160));
 		lbLoadStatus.setText(clipCount > 0 ? "正在生成分集列表：0 / " + clipCount : "正在整理作品信息...");
 	}
@@ -277,6 +362,7 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		btnDownAll.setEnabled(false);
 		btnDownCC.setEnabled(false);
 		btnNextPage.setEnabled(false);
+		selectionBar.setVisible(false);
 		lbLoadStatus.setForeground(new Color(170, 45, 45));
 		lbLoadStatus.setText(message);
 		showPreviewMessage(message);
@@ -420,6 +506,46 @@ public class TabVideo extends JPanel implements ActionListener, MouseListener {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	public void downloadClip(ClipInfo clip) {
+		try {
+			Object selectedQuality = cbQn.getSelectedItem();
+			int qn = selectedQuality != null ? VideoQualityEnum.getQN(selectedQuality.toString()) : 0;
+			DownloadRunnable downThread = new DownloadRunnable(avInfo, clip, qn);
+			DownloadTaskDispatcher.submit(downThread);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void downloadSelected() {
+		if (avInfo == null || avInfo.getClips() == null) {
+			return;
+		}
+		for (Component comp : jpContent.getComponents()) {
+			if (comp instanceof ClipInfoPanel) {
+				ClipInfoPanel clipPanel = (ClipInfoPanel) comp;
+				if (clipPanel.isSelectedForDownload()) {
+					downloadClip(clipPanel.getClip());
+				}
+			}
+		}
+	}
+
+	public void updateSelectionSummary() {
+		int selected = 0;
+		int total = 0;
+		for (Component comp : jpContent.getComponents()) {
+			if (comp instanceof ClipInfoPanel) {
+				total++;
+				if (((ClipInfoPanel) comp).isSelectedForDownload()) {
+					selected++;
+				}
+			}
+		}
+		lbSelectionSummary.setText("已选 " + selected + " / " + total + " 集");
+		btnDownloadSelected.setEnabled(selected > 0);
 	}
 
 //	@Override

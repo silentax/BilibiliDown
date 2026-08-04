@@ -1,9 +1,12 @@
 package nicelee.ui.item;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -34,6 +37,7 @@ import nicelee.ui.Global;
 import nicelee.ui.TabDownload;
 import nicelee.ui.task.DownloadTaskLifecycle;
 import nicelee.ui.task.DownloadTaskState;
+import nicelee.ui.util.AnimeUi;
 import nicelee.ui.util.SwingDispatch;
 
 public class DownloadInfoPanel extends JPanel implements ActionListener {
@@ -94,57 +98,71 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 	}
 
 	void initUI() {
-		this.setLayout(new GridBagLayout());
-		this.setBorder(BorderFactory.createLineBorder(Color.red));
-		this.setPreferredSize(new Dimension(900, 120));
+		this.setLayout(new BorderLayout(10, 4));
+		this.setBorder(AnimeUi.cardBorder(8, 12));
+		this.setBackground(AnimeUi.SURFACE);
+		this.setOpaque(true);
+		this.setPreferredSize(new Dimension(900, 76));
+		this.setMaximumSize(new Dimension(Integer.MAX_VALUE, 76));
+
+		// 中间区域：文件名 + 状态 + 副标题 + 进度
+		JPanel centerPanel = new JPanel(new BorderLayout(0, 3));
+		centerPanel.setOpaque(false);
 
 		lbFileName = new JLabel("尚未生成");
-		lbFileName.setBorder(BorderFactory.createLineBorder(Color.red));
-		addGridComponent(lbFileName, 0, 0, 1.0, 1);
+		lbFileName.setFont(lbFileName.getFont().deriveFont(Font.BOLD, 13.0f));
+		lbFileName.setForeground(AnimeUi.TEXT_PRIMARY);
+		lbCurrentStatus = new JLabel("正在获取下载地址...");
+		lbCurrentStatus.setForeground(AnimeUi.TEXT_SECONDARY);
 
-		btnOpen = new MJButton("打开文件");
-		btnOpen.addActionListener(this);
-		addGridComponent(btnOpen, 1, 0, 0.0, 1);
-
-		btnOpenFolder = new MJButton("打开文件夹");
-		btnOpenFolder.addActionListener(this);
-		addGridComponent(btnOpenFolder, 2, 0, 0.0, 1);
-
-		btnRemove = new MJButton("删除任务");
-		btnRemove.addActionListener(this);
-		addGridComponent(btnRemove, 3, 0, 0.0, 1);
+		JPanel topRow = new JPanel(new BorderLayout(8, 0));
+		topRow.setOpaque(false);
+		topRow.add(lbFileName, BorderLayout.CENTER);
+		topRow.add(lbCurrentStatus, BorderLayout.EAST);
 
 		lbavName = new JLabel(avTitle);
 		lbavName.setToolTipText(avTitle);
-		lbavName.setBorder(BorderFactory.createLineBorder(Color.red));
-		addGridComponent(lbavName, 0, 1, 0.45, 1);
-
-		lbCurrentStatus = new JLabel("正在获取下载地址...");
-		lbCurrentStatus.setBorder(BorderFactory.createLineBorder(Color.red));
-		addGridComponent(lbCurrentStatus, 1, 1, 0.35, 1);
-
+		lbavName.setFont(lbavName.getFont().deriveFont(12.0f));
+		lbavName.setForeground(AnimeUi.TEXT_SECONDARY);
 		lbDownFile = new JLabel("准备中...");
-		lbDownFile.setBorder(BorderFactory.createLineBorder(Color.red));
-		addGridComponent(lbDownFile, 2, 1, 0.20, 1);
-		this.setBackground(new Color(204, 255, 255));
+		lbDownFile.setForeground(AnimeUi.TEXT_SECONDARY);
+
+		JPanel bottomRow = new JPanel(new BorderLayout(8, 0));
+		bottomRow.setOpaque(false);
+		bottomRow.add(lbavName, BorderLayout.WEST);
+		bottomRow.add(lbDownFile, BorderLayout.EAST);
+
+		centerPanel.add(topRow, BorderLayout.NORTH);
+		centerPanel.add(bottomRow, BorderLayout.SOUTH);
+		this.add(centerPanel, BorderLayout.CENTER);
+
+		// 右侧：操作按钮
+		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+		buttonPanel.setOpaque(false);
 
 		btnControl = new MJButton("暂停");
 		btnControl.addActionListener(this);
 		btnControl.setVisible(false);
-		addGridComponent(btnControl, 3, 1, 0.0, 1);
-		setPreparing(true);
-	}
+		AnimeUi.stylePrimaryButton(btnControl);
 
-	private void addGridComponent(Component component, int gridX, int gridY, double weightX, int gridWidth) {
-		GridBagConstraints constraints = new GridBagConstraints();
-		constraints.gridx = gridX;
-		constraints.gridy = gridY;
-		constraints.gridwidth = gridWidth;
-		constraints.weightx = weightX;
-		constraints.weighty = 1.0;
-		constraints.fill = weightX > 0.0 ? GridBagConstraints.BOTH : GridBagConstraints.VERTICAL;
-		constraints.insets = new Insets(4, 4, 4, 4);
-		this.add(component, constraints);
+		btnOpen = new MJButton("打开文件");
+		btnOpen.addActionListener(this);
+		AnimeUi.styleSecondaryButton(btnOpen);
+
+		btnOpenFolder = new MJButton("打开文件夹");
+		btnOpenFolder.addActionListener(this);
+		AnimeUi.styleSecondaryButton(btnOpenFolder);
+
+		btnRemove = new MJButton("删除任务");
+		btnRemove.addActionListener(this);
+		AnimeUi.styleSecondaryButton(btnRemove);
+
+		buttonPanel.add(btnControl);
+		buttonPanel.add(btnOpen);
+		buttonPanel.add(btnOpenFolder);
+		buttonPanel.add(btnRemove);
+		this.add(buttonPanel, BorderLayout.EAST);
+		setPreparing(true);
 	}
 
 	@Override

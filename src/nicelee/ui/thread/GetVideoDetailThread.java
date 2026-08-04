@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import javax.swing.Box;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
@@ -143,8 +144,9 @@ public class GetVideoDetailThread extends Thread {
 			int endIndex = Math.min(result.clips.size(), startIndex + CLIP_RENDER_BATCH_SIZE);
 			for (int index = startIndex; index < endIndex; index++) {
 				content.add(new ClipInfoPanel(result.videoInfo, result.clips.get(index), video));
+			content.add(Box.createVerticalStrut(8));
 			}
-			content.setPreferredSize(new Dimension(0, Math.max(300, 178 * endIndex)));
+			content.setPreferredSize(new Dimension(0, Math.max(300, 84 * endIndex)));
 			content.revalidate();
 			content.repaint();
 			if (endIndex < result.clips.size()) {

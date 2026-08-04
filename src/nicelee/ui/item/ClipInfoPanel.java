@@ -4,6 +4,8 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -15,12 +17,11 @@ import java.awt.event.MouseListener;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 
-import nicelee.bilibili.enums.AudioQualityEnum;
-import nicelee.bilibili.enums.VideoQualityEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.model.VideoInfo;
 import nicelee.bilibili.util.ResourcesUtil;
@@ -29,6 +30,7 @@ import nicelee.ui.Global;
 import nicelee.ui.TabVideo;
 import nicelee.ui.thread.DownloadTaskDispatcher;
 import nicelee.ui.thread.DownloadRunnable;
+import nicelee.ui.util.AnimeUi;
 
 public class ClipInfoPanel extends JPanel implements MouseListener {
 
@@ -43,7 +45,7 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 
 	private JLabel labelTitle;
 	private JPanel buttonPanel;
-	private long lastMousePressed;
+	private JCheckBox selectedBox;
 
 	public ClipInfoPanel(VideoInfo video, ClipInfo clip) {
 		this(video, clip, null);
@@ -58,28 +60,63 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 	}
 
 	void initUI() {
-		this.setLayout(new BorderLayout(0, 8));
-		this.setBorder(BorderFactory.createLineBorder(new Color(205, 210, 216)));
-		this.setPreferredSize(new Dimension(280, 170));
+		this.setLayout(new BorderLayout(12, 0));
+		this.setBorder(AnimeUi.cardBorder(9, 12));
+		this.setPreferredSize(new Dimension(560, 76));
+		this.setMaximumSize(new Dimension(Integer.MAX_VALUE, 76));
+		this.setBackground(AnimeUi.SURFACE);
+		this.setOpaque(true);
+
+		JPanel selector = new JPanel(new BorderLayout(8, 0));
+		selector.setOpaque(false);
+		selectedBox = new JCheckBox();
+		selectedBox.setOpaque(false);
+		selectedBox.setToolTipText("选择此分集用于批量下载");
+		selectedBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				setBackground(selectedBox.isSelected() ? AnimeUi.ACCENT_SOFT : AnimeUi.SURFACE);
+				if (tabVideo != null) {
+					tabVideo.updateSelectionSummary();
+				}
+			}
+		});
+		JLabel pageBadge = new JLabel("P" + clip.getPage(), JLabel.CENTER);
+		pageBadge.setOpaque(true);
+		pageBadge.setForeground(AnimeUi.ACCENT);
+		pageBadge.setBackground(AnimeUi.ACCENT_SOFT);
+		pageBadge.setBorder(new EmptyBorder(5, 8, 5, 8));
+		pageBadge.setFont(pageBadge.getFont().deriveFont(Font.BOLD));
+		selector.add(selectedBox, BorderLayout.WEST);
+		selector.add(pageBadge, BorderLayout.CENTER);
+		this.add(selector, BorderLayout.WEST);
+
 		// 分情况显示
 		boolean isPic = ResourcesUtil.isPicture(clip);
 		if(clip.getListName() != null || isPic) {
-			labelTitle = new JLabel(clip.getRemark() + " - " + clip.getAvTitle()+ " " +clip.getTitle(), JLabel.CENTER);
+			labelTitle = new JLabel(clip.getAvTitle() + " · " + clip.getTitle());
 		}else {
-			labelTitle = new JLabel(clip.getRemark() + " - " + clip.getTitle(), JLabel.CENTER);
+			labelTitle = new JLabel(clip.getTitle());
 		}
+		labelTitle.setFont(labelTitle.getFont().deriveFont(Font.BOLD, 14.0f));
+		labelTitle.setForeground(AnimeUi.TEXT_PRIMARY);
 		labelTitle.addMouseListener(this);
-		labelTitle.setToolTipText(clip.getAvTitle() + clip.getTitle());
-		labelTitle.setBorder(new EmptyBorder(8, 8, 0, 8));
-		this.setOpaque(false);
-		this.add(labelTitle, BorderLayout.NORTH);
+		labelTitle.setToolTipText(clip.getAvTitle() + " · " + clip.getTitle());
+		JLabel metadata = new JLabel("分集 " + clip.getRemark() + "   ·   " + clip.getAvId());
+		metadata.setForeground(AnimeUi.TEXT_SECONDARY);
+		JPanel info = new JPanel(new GridLayout(2, 1, 0, 4));
+		info.setOpaque(false);
+		info.add(labelTitle);
+		info.add(metadata);
+		this.add(info, BorderLayout.CENTER);
 
-		buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 3));
 		buttonPanel.setOpaque(false);
-		this.add(buttonPanel, BorderLayout.CENTER);
+		this.add(buttonPanel, BorderLayout.EAST);
 
 		if(!isPic) {
 			JButton btnDanmuku = new MJButton("弹幕");
+			AnimeUi.styleSecondaryButton(btnDanmuku);
 			btnDanmuku.addActionListener(new ActionListener() {
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -89,26 +126,22 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 			});
 			buttonPanel.add(btnDanmuku);
 		}
-		
-		for (final int qn : clip.getLinks().keySet()) {
-			if(qn >= 800)
-				continue;
-			// JButton btn = new JButton("清晰度: " + qn);
-			String qnName = VideoQualityEnum.getQualityDescript(qn);
-			if (qnName == null)
-				qnName = AudioQualityEnum.getQualityDescript(qn);
-			JButton btn = null;
-			if (qnName != null && !isPic) {
-				btn = new MJButton(qnName);
-			} else {
-				btn = new MJButton("清晰度: " + qn);
-			}
-			initQnBtn(qn, btn);
-		}
 		if(!isPic) {
 			JButton btn = new MJButton("字幕");
+			AnimeUi.styleSecondaryButton(btn);
 			initQnBtn(800, btn);
 		}
+		JButton btnDownload = new MJButton("下载");
+		AnimeUi.stylePrimaryButton(btnDownload);
+		btnDownload.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				if (tabVideo != null) {
+					tabVideo.downloadClip(clip);
+				}
+			}
+		});
+		buttonPanel.add(btnDownload);
 	}
 
 	/**
@@ -127,8 +160,28 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 		buttonPanel.add(btn);
 	}
 
+	public boolean isSelectedForDownload() {
+		return selectedBox.isSelected();
+	}
+
+	public void setSelectedForDownload(boolean selected) {
+		selectedBox.setSelected(selected);
+		setBackground(selected ? AnimeUi.ACCENT_SOFT : AnimeUi.SURFACE);
+	}
+
+	public ClipInfo getClip() {
+		return clip;
+	}
+
 	@Override
 	public void mouseClicked(MouseEvent e) {
+		if (e.getClickCount() == 1 && tabVideo != null) {
+			String preview = clip.getPicPreview();
+			if (preview != null) {
+				tabVideo.loadPreviewImageAsync(preview);
+			}
+			return;
+		}
 		if (e.getClickCount() < 2) {
 			return;
 		}
@@ -143,20 +196,12 @@ public class ClipInfoPanel extends JPanel implements MouseListener {
 
 	@Override
 	public void mousePressed(MouseEvent e) {
-		lastMousePressed = System.currentTimeMillis();
-		labelTitle.setBorder(BorderFactory.createLineBorder(Color.red));
+		labelTitle.setForeground(AnimeUi.ACCENT);
 	}
 
 	@Override
 	public void mouseReleased(MouseEvent e) {
-		labelTitle.setBorder(new EmptyBorder(8, 8, 0, 8));
-		long timeTouched = System.currentTimeMillis() - lastMousePressed;
-		if(timeTouched >= 500 && tabVideo != null) {
-			String toDisplay = clip.getPicPreview();
-			if(toDisplay != null && !toDisplay.equals(tabVideo.getCurrentDisplayPic())) {
-				tabVideo.loadPreviewImageAsync(toDisplay);
-			}
-		}
+		labelTitle.setForeground(AnimeUi.TEXT_PRIMARY);
 	}
 
 	@Override

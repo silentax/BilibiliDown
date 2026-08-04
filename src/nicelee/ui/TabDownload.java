@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
@@ -12,7 +13,7 @@ import java.awt.event.ActionListener;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -21,6 +22,7 @@ import javax.swing.border.EmptyBorder;
 
 import nicelee.ui.item.DownloadInfoPanel;
 import nicelee.ui.item.JOptionPane;
+import nicelee.ui.util.AnimeUi;
 import nicelee.ui.item.MJButton;
 import nicelee.ui.thread.DownloadExecutors;
 import nicelee.ui.util.SwingDispatch;
@@ -33,8 +35,6 @@ public class TabDownload extends JPanel implements ActionListener {
 	 */
 	private static final long serialVersionUID = 8714599826187286737L;
 	private static volatile boolean stopAll = false;
-	ImageIcon backgroundIcon = Global.backgroundImg;
-
 	JPanel jpContent;
 	JScrollPane jpScorll;
 	JLabel lbStatus;
@@ -95,16 +95,32 @@ public class TabDownload extends JPanel implements ActionListener {
 
 	public void addTaskPanel(DownloadInfoPanel panel) {
 		jpContent.add(panel);
+		jpContent.add(Box.createVerticalStrut(8));
 		resizeTaskPanel();
 	}
 
 	public void removeTaskPanel(DownloadInfoPanel panel) {
-		jpContent.remove(panel);
+		for (int i = 0; i < jpContent.getComponentCount(); i++) {
+			if (jpContent.getComponent(i) == panel) {
+				jpContent.remove(i);
+				if (i < jpContent.getComponentCount()) {
+					jpContent.remove(i);
+				}
+				break;
+			}
+		}
 		resizeTaskPanel();
 	}
 
 	private void resizeTaskPanel() {
-		jpContent.setPreferredSize(new Dimension(0, Math.max(300, 128 * jpContent.getComponentCount())));
+		int taskCount = 0;
+		for (java.awt.Component c : jpContent.getComponents()) {
+			if (c instanceof DownloadInfoPanel) {
+				taskCount++;
+			}
+		}
+		int height = taskCount > 0 ? 84 * taskCount : 300;
+		jpContent.setPreferredSize(new Dimension(0, Math.max(300, height)));
 		jpContent.revalidate();
 		jpContent.repaint();
 	}
@@ -118,8 +134,9 @@ public class TabDownload extends JPanel implements ActionListener {
 		// 状态 totalTask, activeTask, pauseTask, doneTask, queuingTask
 		lbStatus = new JLabel();
 		lbStatus.setOpaque(true);
-		lbStatus.setBackground(new Color(204, 255, 255));
-		lbStatus.setBorder(BorderFactory.createLineBorder(Color.BLUE));
+		lbStatus.setBackground(AnimeUi.ACCENT_SOFT);
+		lbStatus.setForeground(AnimeUi.TEXT_PRIMARY);
+		lbStatus.setBorder(AnimeUi.cardBorder(6, 10));
 		toolbar.add(lbStatus, BorderLayout.CENTER);
 		requestStatusRefresh();
 
@@ -127,9 +144,13 @@ public class TabDownload extends JPanel implements ActionListener {
 		JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
 		actions.setOpaque(false);
 		btnContinue = new MJButton("全部继续");
+		AnimeUi.styleSecondaryButton(btnContinue);
 		btnStop = new MJButton("全部暂停");
+		AnimeUi.styleSecondaryButton(btnStop);
 		btnDeleteAll = new MJButton("全部删除");
+		AnimeUi.styleSecondaryButton(btnDeleteAll);
 		btnDeleteDown = new MJButton("删除已完成");
+		AnimeUi.styleSecondaryButton(btnDeleteDown);
 		Dimension size = new Dimension(100, 30);
 		btnContinue.setPreferredSize(size);
 		btnStop.setPreferredSize(size);
@@ -148,7 +169,8 @@ public class TabDownload extends JPanel implements ActionListener {
 		this.add(toolbar, BorderLayout.NORTH);
 
 		// 下载任务Panel
-		jpContent = new JPanel(new GridLayout(0, 1, 0, 8));
+		jpContent = new JPanel();
+		jpContent.setLayout(new javax.swing.BoxLayout(jpContent, javax.swing.BoxLayout.Y_AXIS));
 		jpContent.setBorder(new EmptyBorder(8, 8, 8, 8));
 		jpContent.setPreferredSize(new Dimension(0, 300));
 		jpContent.setOpaque(false);
@@ -168,33 +190,10 @@ public class TabDownload extends JPanel implements ActionListener {
 	@Override
 	public void paintComponent(Graphics og) {
 		super.paintComponent(og);
-		if (og == null || backgroundIcon == null) {
+		if (og == null) {
 			return;
 		}
-		Graphics g = og.create();
-		Image img = backgroundIcon.getImage();
-		int width = img.getWidth(this.getParent());
-		int height = img.getHeight(this.getParent());
-		if (width <= 0 || height <= 0) {
-			g.dispose();
-			return;
-		}
-		int xGap = 5;
-		int xCnt = this.getSize().width / (width + xGap) + 1;
-		int yGap = 5;
-		int yCnt = this.getSize().height / (height + yGap) + 1;
-		if( xCnt >= 3) {
-			for(int x = 0; x <= xCnt; x++) {
-				int xp = xGap + (width + xGap) * x;
-				for(int y = 0; y < yCnt; y++) {
-					int yp = yGap + (height + yGap) * y;
-					g.drawImage(backgroundIcon.getImage(), xp, yp, width, height, this.getParent());
-				}
-			}
-		}else {
-			g.drawImage(backgroundIcon.getImage(), 0, 0, this.getSize().width, this.getSize().height, this.getParent());
-		}
-		g.dispose();
+		AnimeUi.paintBackground((Graphics2D) og, getWidth(), getHeight());
 	}
 
 	@Override
