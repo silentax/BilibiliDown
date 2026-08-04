@@ -304,8 +304,37 @@ public class ResourcesUtil {
 			} else {
 				cacheBaseDir = System.getProperty("user.dir", "");
 			}
+			// 安装包环境（如 jpackage）中 JAR 所在目录可能只读，
+			// 回退到用户数据目录以保证配置和下载可写。
+			if (!isWritableDirectory(cacheBaseDir)) {
+				cacheBaseDir = defaultUserDataDir();
+			}
 		}
 		return cacheBaseDir;
+	}
+
+	private static boolean isWritableDirectory(String dir) {
+		if (dir == null || dir.isEmpty()) {
+			return false;
+		}
+		File f = new File(dir);
+		return f.exists() && f.isDirectory() && f.canWrite();
+	}
+
+	private static String defaultUserDataDir() {
+		String os = System.getProperty("os.name", "").toLowerCase();
+		String home = System.getProperty("user.home", "");
+		String base;
+		if (os.contains("mac")) {
+			base = home + "/Library/Application Support/BilibiliDown";
+		} else if (os.contains("win")) {
+			String appData = System.getenv("APPDATA");
+			base = (appData != null && !appData.isEmpty()) ? appData + "/BilibiliDown" : home + "/BilibiliDown";
+		} else {
+			base = home + "/.BilibiliDown";
+		}
+		new File(base).mkdirs();
+		return base;
 	}
 
 	public static String canonicalPath(String path) {

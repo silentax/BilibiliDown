@@ -503,3 +503,33 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
 - 多分 P 视频分集列表正常排列，批量选择工具栏（全选/取消全选/反选/下载所选）功能正常。
 - 下载页任务行紧凑显示，完成后不再平铺，按钮整齐排列。
 - 视频下载成功，ffmpeg 合并正常，产物可播放。
+
+## 25. jpackage 原生安装包里程碑
+
+截至 2026-08-04，使用 jpackage 生成内置 JRE 的平台原生安装包，用户无需自行安装 Java。
+
+Mac (.dmg):
+
+- `scripts/build-mac.sh` 构建脚本，产出 `build/dist/BilibiliDown-6.41.0.dmg` (约 57MB)。
+- 包含完整 .app 包：原生启动器、内置 JRE (jlink 裁剪)、fat JAR、.icns 图标。
+- 双击 .dmg 拖入 Applications 即可使用。
+- 应用数据目录自动回退到 `~/Library/Application Support/BilibiliDown`。
+
+Windows (.exe):
+
+- `scripts/build-windows.bat` 构建脚本，需在 Windows 上运行，需安装 Inno Setup 6+。
+- 产出 `build/dist/BilibiliDown-6.41.0.exe`，内置 JRE，从开始菜单启动。
+- 应用数据目录自动回退到 `%APPDATA%/BilibiliDown`。
+
+核心改动:
+
+- `ResourcesUtil.baseDirectory()` 新增只读目录检测：当 JAR 所在目录不可写时（jpackage 安装包环境），自动回退到平台对应的用户数据目录。
+- `release/INeedBiliAV.jar` 更新为最新 fat JAR。
+- `release/Double-Click-to-Run-for-Win.bat` 修复：从 `launch.jar` 改为 `INeedBiliAV.jar`。
+- 新增 `docs/BUILD.md` 构建与打包指南。
+
+验证:
+
+- Java 8 toolchain + JDK 21 各 21 项全部通过。
+- Mac .dmg 构建成功，挂载验证包含完整 .app 包、Applications 快捷方式、内置 JRE。
+- jpackage 不能交叉编译，Windows .exe 需在 Windows 机器上构建。

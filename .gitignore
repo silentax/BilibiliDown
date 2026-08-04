@@ -8,6 +8,7 @@
 *.config
 *.bat
 !gradlew.bat
+!scripts/build-windows.bat
 *.flv
 *.mp4
 *.exe
