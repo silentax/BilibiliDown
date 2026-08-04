@@ -30,6 +30,7 @@ public final class ManualDownloadE2E {
 	public static void main(String[] args) throws Exception {
 		String canonicalUrl = requireCanonicalVideoUrl(System.getProperty("e2e.url"));
 		DownloadModeEnum mode = parseMode(System.getProperty("e2e.mode", "all"));
+		int downloadThreads = parseDownloadThreads(System.getProperty("e2e.threads", "0"));
 		File dataDirectory = requireDataDirectory(System.getProperty("e2e.dataDir"));
 		File outputDirectory = ResourcesUtil.resolveUnderDirectory(dataDirectory, "download");
 		if (!outputDirectory.exists() && !outputDirectory.mkdirs()) {
@@ -37,7 +38,7 @@ public final class ManualDownloadE2E {
 		}
 
 		ConfigUtil.initConfigs();
-		configureIsolatedRun(outputDirectory, mode);
+		configureIsolatedRun(outputDirectory, mode, downloadThreads);
 		HttpCookies.setGlobalCookies(null);
 
 		INeedAV application = new INeedAV();
@@ -74,11 +75,12 @@ public final class ManualDownloadE2E {
 			throw new IllegalStateException("The final file escaped the isolated E2E output directory");
 		}
 
-		System.out.printf("MANUAL_E2E_OK mode=%s parts=%d bytes=%d file=%s%n", mode.name(),
-				video.getClips().size(), result.length(), result.getName());
+		System.out.printf("MANUAL_E2E_OK mode=%s threads=%d parts=%d bytes=%d file=%s%n", mode.name(),
+				downloadThreads, video.getClips().size(), result.length(), result.getName());
 	}
 
-	private static void configureIsolatedRun(File outputDirectory, DownloadModeEnum mode) throws Exception {
+	private static void configureIsolatedRun(File outputDirectory, DownloadModeEnum mode, int downloadThreads)
+			throws Exception {
 		Global.downloadMode = mode;
 		Global.downloadFormat = Global.MP4;
 		Global.savePath = outputDirectory.getCanonicalPath() + File.separator;
@@ -87,7 +89,9 @@ public final class ManualDownloadE2E {
 		Global.useRepo = false;
 		Global.saveToRepo = false;
 		Global.doRenameAfterComplete = false;
-		Global.multiThreadCnt = 0;
+		Global.multiThreadCnt = downloadThreads;
+		if (downloadThreads > 1)
+			Global.singleThreadPattern = Pattern.compile("a^");
 		Global.checkDashUrl = false;
 		Global.debugCmd = false;
 		CmdUtil.FFMPEG_PATH = System.getProperty("e2e.ffmpeg", "ffmpeg");
@@ -120,6 +124,16 @@ public final class ManualDownloadE2E {
 			return DownloadModeEnum.All;
 		}
 		throw new IllegalArgumentException("e2eMode must be one of: all, video, audio");
+	}
+
+	private static int parseDownloadThreads(String value) {
+		try {
+			int threads = Integer.parseInt(value);
+			if (threads >= 0 && threads <= 16)
+				return threads;
+		} catch (NumberFormatException ignored) {
+		}
+		throw new IllegalArgumentException("e2eThreads must be between 0 and 16");
 	}
 
 	private static File requireDataDirectory(String value) throws Exception {

@@ -25,6 +25,7 @@ import nicelee.bilibili.downloaders.IDownloader;
 import nicelee.bilibili.enums.StatusEnum;
 import nicelee.bilibili.model.ClipInfo;
 import nicelee.bilibili.util.Logger;
+import nicelee.bilibili.util.ResourcesUtil;
 import nicelee.bilibili.util.custom.System;
 import nicelee.ui.Global;
 import nicelee.ui.TabDownload;
@@ -318,12 +319,12 @@ public class DownloadInfoPanel extends JPanel implements ActionListener {
 			Global.downloadTaskList.remove(this, downloader);
 			// 当前页面控件删除
 			Global.downloadTab.removeTaskPanel(this);
-			final File partialFile = new File(lbFileName.getText() + ".part");
+			final File downloadFile = downloader.file();
 			Thread cleanupThread = new Thread(new Runnable() {
 				@Override
 				public void run() {
 					downloader.stopTask();
-					if (partialFile.exists() && !partialFile.delete()) {
+					if (!ResourcesUtil.deleteDownloadPartFiles(downloadFile)) {
 						Logger.println("未能删除下载任务的临时文件");
 					}
 				}

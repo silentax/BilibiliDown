@@ -186,6 +186,15 @@ tasks.register('httpContractTest', JavaExec) {
     jvmArgs '-Djava.awt.headless=true'
 }
 
+tasks.register('httpMultiThreadContractTest', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Runs loopback Range, resume, cancellation, and merge tests for the multi-thread downloader.'
+    dependsOn tasks.named('contractTestClasses')
+    classpath = sourceSets.contractTest.runtimeClasspath
+    mainClass = 'nicelee.test.contract.HttpRequestUtilExContractTest'
+    jvmArgs '-Djava.awt.headless=true'
+}
+
 tasks.register('manualE2e', JavaExec) {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = 'Manually parses and downloads the first part of a canonical Bilibili video URL.'
@@ -196,6 +205,7 @@ tasks.register('manualE2e', JavaExec) {
     doFirst {
         String e2eUrl = providers.gradleProperty('e2eUrl').getOrElse('').trim()
         String e2eMode = providers.gradleProperty('e2eMode').getOrElse('all').trim()
+        String e2eThreads = providers.gradleProperty('e2eThreads').getOrElse('0').trim()
         File dataDirectory = providers.gradleProperty('e2eDataDir')
                 .map { file(it) }
                 .getOrElse(temporaryDir)
@@ -207,6 +217,7 @@ tasks.register('manualE2e', JavaExec) {
         }
         systemProperty 'e2e.url', e2eUrl
         systemProperty 'e2e.mode', e2eMode
+        systemProperty 'e2e.threads', e2eThreads
         systemProperty 'e2e.dataDir', dataDirectory.absolutePath
         systemProperty 'bilibili.prop.dataDirPath', dataDirectory.absolutePath
     }
@@ -219,7 +230,7 @@ tasks.named('check') {
             tasks.named('ffmpegDownloadSecurityTest'), tasks.named('legacyUpdateSecurityTest'),
             tasks.named('sourcePluginSecurityTest'), tasks.named('credentialSecurityTest'),
             tasks.named('repositoryPrivacyTest'), tasks.named('loggerPrivacyTest'), tasks.named('uiExperienceTest'),
-            tasks.named('httpContractTest')
+            tasks.named('httpContractTest'), tasks.named('httpMultiThreadContractTest')
 }
 
 tasks.named('jar') {

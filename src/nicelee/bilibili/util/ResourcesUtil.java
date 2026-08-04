@@ -17,6 +17,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.EnumSet;
 import java.util.Random;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import nicelee.bilibili.model.ClipInfo;
 
@@ -121,6 +122,37 @@ public class ResourcesUtil {
 		if (!candidatePath.equals(basePath) && !candidatePath.startsWith(basePath + File.separator))
 			throw new IOException("目标文件路径超出下载目录");
 		return candidate;
+	}
+
+	/**
+	 * 删除某个下载目标对应的单线程和多线程临时文件，不删除最终成品。
+	 */
+	public static boolean deleteDownloadPartFiles(File destination) {
+		if (destination == null || destination.getParentFile() == null)
+			return true;
+		File parent = destination.getParentFile();
+		if (!parent.exists())
+			return true;
+		File[] files = parent.listFiles();
+		if (files == null)
+			return false;
+		String baseName = destination.getName();
+		Pattern numberedPart = Pattern.compile(Pattern.quote(baseName) + "\\.part[0-9]+");
+		boolean success = true;
+		for (File file : files) {
+			String name = file.getName();
+			boolean temporary = name.equals(baseName + ".part") || numberedPart.matcher(name).matches()
+					|| name.equals(baseName + ".part.meta") || name.equals(baseName + ".part.meta.new")
+					|| name.equals(baseName + ".part.merge");
+			if (temporary) {
+				try {
+					Files.deleteIfExists(file.toPath());
+				} catch (IOException | SecurityException e) {
+					success = false;
+				}
+			}
+		}
+		return success;
 	}
 
 	public static String readAll(File f) {

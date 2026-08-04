@@ -20,10 +20,15 @@ public class ResourcesUtilSecurityTest {
 			testPathContained(base);
 			testPathEscapeRejected(base);
 			testSensitiveFilePermissions(secret);
+			testDownloadPartCleanup(base);
 			System.out.println("ResourcesUtilSecurityTest PASS");
 		} finally {
-			secret.delete();
-			base.delete();
+			File[] files = base.listFiles();
+			if (files != null) {
+				for (File file : files)
+					Files.deleteIfExists(file.toPath());
+			}
+			Files.deleteIfExists(base.toPath());
 		}
 	}
 
@@ -54,5 +59,27 @@ public class ResourcesUtilSecurityTest {
 		} catch (UnsupportedOperationException expected) {
 			// 非 POSIX 平台由 File owner-only 权限回退逻辑负责。
 		}
+	}
+
+	private static void testDownloadPartCleanup(File base) throws Exception {
+		File destination = new File(base, "video.mp4");
+		String[] removable = { "video.mp4.part", "video.mp4.part0", "video.mp4.part15", "video.mp4.part.meta",
+				"video.mp4.part.meta.new", "video.mp4.part.merge" };
+		for (String name : removable)
+			Files.write(new File(base, name).toPath(), new byte[] { 1 });
+		File unrelated = new File(base, "video.mp4.part-other");
+		File otherDownload = new File(base, "other.mp4.part0");
+		Files.write(destination.toPath(), new byte[] { 2 });
+		Files.write(unrelated.toPath(), new byte[] { 3 });
+		Files.write(otherDownload.toPath(), new byte[] { 4 });
+
+		if (!ResourcesUtil.deleteDownloadPartFiles(destination))
+			throw new AssertionError("下载临时文件清理失败");
+		for (String name : removable) {
+			if (new File(base, name).exists())
+				throw new AssertionError("下载临时文件未删除: " + name);
+		}
+		if (!destination.isFile() || !unrelated.isFile() || !otherDownload.isFile())
+			throw new AssertionError("临时文件清理误删了成品或无关文件");
 	}
 }

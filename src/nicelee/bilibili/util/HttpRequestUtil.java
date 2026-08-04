@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
@@ -39,8 +40,8 @@ public class HttpRequestUtil {
 	// 下载缓存区
 	protected byte[] buffer;
 	// 下载文件大小状态
-	protected Long downloadedFileSize;
-	protected long totalFileSize;
+	protected final AtomicLong downloadedFileSize;
+	protected volatile long totalFileSize;
 	// 下载文件
 	protected String savePath = "./download/";
 	protected File fileDownload;
@@ -61,7 +62,7 @@ public class HttpRequestUtil {
 	}
 
 	public HttpRequestUtil(CookieManager manager) {
-		downloadedFileSize = 0L;
+		downloadedFileSize = new AtomicLong();
 		this.manager = manager;
 		manager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
 		CookieHandler.setDefault(manager);
@@ -103,7 +104,7 @@ public class HttpRequestUtil {
 	 * 重置统计参数
 	 */
 	public void reset() {
-		downloadedFileSize = 0L;
+		downloadedFileSize.set(0L);
 		totalFileSize = 0;
 	}
 
@@ -136,7 +137,7 @@ public class HttpRequestUtil {
 		}
 		if (fileDownload.exists() || fileDst.exists()) {
 			totalFileSize = fileDownload.length();
-			downloadedFileSize = fileDownload.length();
+			downloadedFileSize.set(fileDownload.length());
 			status = StatusEnum.SUCCESS;
 			// 文件已存在,无需下载
 			return true;
@@ -197,7 +198,7 @@ public class HttpRequestUtil {
 			inn = conn.getInputStream();
 			if (buffer == null)
 				buffer = new byte[1024 * 1024];
-			downloadedFileSize = offset;
+			downloadedFileSize.set(offset);
 			int lenRead;
 			while ((lenRead = inn.read(buffer)) != -1) {
 				if (!bDown) {
@@ -207,7 +208,7 @@ public class HttpRequestUtil {
 				if (lenRead == 0)
 					continue;
 				raf.write(buffer, 0, lenRead);
-				downloadedFileSize += lenRead;
+				downloadedFileSize.addAndGet(lenRead);
 			}
 			ResourcesUtil.closeQuietly(inn);
 			inn = null;
@@ -241,7 +242,7 @@ public class HttpRequestUtil {
 		}
 	}
 
-	private static void moveCompletedDownload(File source, File destination) throws IOException {
+	protected static void moveCompletedDownload(File source, File destination) throws IOException {
 		try {
 			Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE);
 		} catch (AtomicMoveNotSupportedException e) {
@@ -461,7 +462,7 @@ public class HttpRequestUtil {
 	}
 
 	public long getDownloadedFileSize() {
-		return downloadedFileSize;
+		return downloadedFileSize.get();
 	}
 
 	public long getTotalFileSize() {
